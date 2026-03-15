@@ -14,8 +14,11 @@ import { AdminPanel } from './components/AdminPanel'
 import { TradeTicker } from './components/TradeTicker'
 import { MarqueeTicker } from './components/MarqueeTicker'
 import { DisplayNameForm } from './components/DisplayNameForm'
+import { TradeLog } from './components/TradeLog'
 
 type Tab = 'all' | 'gainers' | 'losers'
+type Page = 'market' | 'tradelog'
+type StockSort = 'name' | 'price' | 'change' | 'change_desc'
 
 async function loadAllData(userId: string): Promise<{
   stocks: Stock[]
@@ -74,6 +77,8 @@ function App() {
 
   const [selectedStock, setSelectedStock] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('all')
+  const [page, setPage] = useState<Page>('market')
+  const [stockSort, setStockSort] = useState<StockSort>('name')
   const [showAdmin, setShowAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -160,11 +165,20 @@ function App() {
   const credits = portfolio ? Number(portfolio.credits) : 1000
   const portfolioValue = computePortfolioValue(holdings, stocks)
 
-  const filteredStocks = stocks.filter(s => {
-    if (tab === 'gainers') return s.current_price > s.previous_close
-    if (tab === 'losers') return s.current_price < s.previous_close
-    return true
-  })
+  const pctChange = (s: Stock) => s.previous_close > 0 ? ((s.current_price - s.previous_close) / s.previous_close) * 100 : 0
+
+  const filteredStocks = stocks
+    .filter(s => {
+      if (tab === 'gainers') return s.current_price > s.previous_close
+      if (tab === 'losers') return s.current_price < s.previous_close
+      return true
+    })
+    .sort((a, b) => {
+      if (stockSort === 'price') return b.current_price - a.current_price
+      if (stockSort === 'change') return pctChange(b) - pctChange(a)
+      if (stockSort === 'change_desc') return pctChange(a) - pctChange(b)
+      return a.ticker.localeCompare(b.ticker)
+    })
 
   const selected = stocks.find(s => s.id === selectedStock) || null
   const selectedHolding = holdings.find(h => h.stock_id === selectedStock)?.quantity || 0
@@ -178,25 +192,45 @@ function App() {
         username={username}
         isAdmin={isAdmin}
         showAdmin={showAdmin}
+        page={page}
+        onPageChange={p => { setPage(p as Page); setShowAdmin(false) }}
         onToggleAdmin={() => setShowAdmin(!showAdmin)}
         onLogout={handleLogout}
       />
 
       {showAdmin && isAdmin ? (
         <AdminPanel stocks={stocks} onUpdate={handleTraded} />
+      ) : page === 'tradelog' ? (
+        <TradeLog trades={trades} stocks={stocks} />
       ) : (
         <main className="max-w-[1200px] mx-auto px-4 py-6">
-          <div className="flex items-center gap-6 border-b border-border mb-6">
-            {([['all', 'All'], ['gainers', 'Top Gainers'], ['losers', 'Top Losers']] as const).map(([key, label]) => (
-              <button
-                key={key}
-                onClick={() => setTab(key)}
-                className={`pb-3 text-sm font-medium transition-colors cursor-pointer relative ${tab === key ? 'text-dark' : 'text-text-muted hover:text-text-secondary'}`}
-              >
-                {label}
-                {tab === key && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />}
-              </button>
-            ))}
+          <div className="flex items-center justify-between border-b border-border mb-6">
+            <div className="flex items-center gap-6">
+              {([['all', 'All'], ['gainers', 'Top Gainers'], ['losers', 'Top Losers']] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setTab(key)}
+                  className={`pb-3 text-sm font-medium transition-colors cursor-pointer relative ${tab === key ? 'text-dark' : 'text-text-muted hover:text-text-secondary'}`}
+                >
+                  {label}
+                  {tab === key && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 pb-3">
+              <span className="text-xs text-text-muted mr-1">Sort:</span>
+              {([['name', 'Name'], ['price', 'Price'], ['change', '% Gain'], ['change_desc', '% Loss']] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  onClick={() => setStockSort(key)}
+                  className={`px-2 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                    stockSort === key ? 'bg-primary/10 text-primary' : 'text-text-muted hover:text-dark hover:bg-bg'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
 
           {loading ? (
