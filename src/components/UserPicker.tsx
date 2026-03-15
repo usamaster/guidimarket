@@ -7,15 +7,11 @@ interface UserPickerProps {
 export function UserPicker({ onSelect }: UserPickerProps) {
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center p-4">
-      <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <span className="text-[28px] font-medium tracking-tight text-dark">
-            guidi<span className="text-primary font-bold">market</span>
-          </span>
-          <p className="text-text-secondary text-sm mt-2">Who are you?</p>
-        </div>
+      <div className="w-full max-w-xs">
+        <h1 className="text-xl font-bold text-dark text-center mb-1">Sign in</h1>
+        <p className="text-text-muted text-sm text-center mb-6">Choose your account to continue</p>
 
-        <div className="bg-surface rounded-2xl border border-border p-2 space-y-1">
+        <div className="bg-surface rounded-2xl border border-border p-1.5 space-y-0.5">
           {USERS.map(user => (
             <button
               key={user}

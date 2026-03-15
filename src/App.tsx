@@ -1,11 +1,13 @@
 import { useState, useSyncExternalStore, useCallback } from 'react'
 import { supabase } from './lib/supabase'
 import type { Bet } from './lib/database.types'
+import type { Session } from '@supabase/supabase-js'
 import { Header } from './components/Header'
 import { BetCard } from './components/BetCard'
 import { CreateBetModal } from './components/CreateBetModal'
 import { EmptyState } from './components/EmptyState'
 import { UserPicker } from './components/UserPicker'
+import { LoginScreen } from './components/LoginScreen'
 
 const USERS = ['Us', 'Victor', 'Fons', 'Yit', 'Aris'] as const
 const TABS = ['All', 'Open', 'Active', 'Resolved'] as const
@@ -38,8 +40,6 @@ function fetchBetsFromApi() {
   return fetchPromise
 }
 
-fetchBetsFromApi()
-
 function subscribeBets(onStoreChange: () => void) {
   listeners.push(onStoreChange)
   return () => { listeners = listeners.filter(l => l !== onStoreChange) }
@@ -49,7 +49,36 @@ function getSnapshot() {
   return betsCache
 }
 
+let sessionCache: { session: Session | null; loading: boolean } = { session: null, loading: true }
+let sessionListeners: Array<() => void> = []
+
+function notifySessionListeners() {
+  sessionListeners.forEach(l => l())
+}
+
+supabase.auth.getSession().then(({ data }) => {
+  sessionCache = { session: data.session, loading: false }
+  notifySessionListeners()
+  if (data.session) fetchBetsFromApi()
+})
+
+supabase.auth.onAuthStateChange((_event, session) => {
+  sessionCache = { session, loading: false }
+  notifySessionListeners()
+  if (session) fetchBetsFromApi()
+})
+
+function subscribeSession(onStoreChange: () => void) {
+  sessionListeners.push(onStoreChange)
+  return () => { sessionListeners = sessionListeners.filter(l => l !== onStoreChange) }
+}
+
+function getSessionSnapshot() {
+  return sessionCache
+}
+
 function App() {
+  const { session, loading: authLoading } = useSyncExternalStore(subscribeSession, getSessionSnapshot)
   const [currentUser, setCurrentUser] = useState<string | null>(() => localStorage.getItem('guidimarket_user'))
   const { data: bets, loading } = useSyncExternalStore(subscribeBets, getSnapshot)
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -63,6 +92,7 @@ function App() {
   const handleLogout = () => {
     localStorage.removeItem('guidimarket_user')
     setCurrentUser(null)
+    supabase.auth.signOut()
   }
 
   const refreshBets = useCallback(() => {
@@ -97,6 +127,18 @@ function App() {
 
   const openCount = bets.filter(b => b.status === 'open').length
   const activeCount = bets.filter(b => b.status === 'taken').length
+
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-bg flex items-center justify-center">
+        <div className="w-7 h-7 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    )
+  }
+
+  if (!session) {
+    return <LoginScreen onLoggedIn={() => { fetchBetsFromApi() }} />
+  }
 
   if (!currentUser) {
     return <UserPicker onSelect={handleSelectUser} />
