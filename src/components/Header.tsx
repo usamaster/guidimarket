@@ -13,7 +13,7 @@ export function Header({ credits, portfolioValue, username, isAdmin, showAdmin, 
     <header className="bg-surface border-b border-border sticky top-0 z-50">
       <div className="max-w-[1200px] mx-auto px-4 h-14 flex items-center justify-between gap-4">
         <span className="text-[22px] font-medium tracking-tight text-dark">
-          guidi<span className="text-primary font-bold">market</span>
+          Landalf<span className="text-primary font-bold">Stock Market</span>
         </span>
 
         <div className="flex items-center gap-4">
@@ -62,4 +62,3 @@ export function Header({ credits, portfolioValue, username, isAdmin, showAdmin, 
     </header>
   )
 }
-
