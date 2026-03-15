@@ -11,6 +11,8 @@ import { StockDetail } from './components/StockDetail'
 import { PortfolioSidebar } from './components/Portfolio'
 import { Leaderboard } from './components/Leaderboard'
 import { AdminPanel } from './components/AdminPanel'
+import { TradeTicker } from './components/TradeTicker'
+import { MarqueeTicker } from './components/MarqueeTicker'
 
 type Tab = 'all' | 'gainers' | 'losers'
 
@@ -170,6 +172,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-bg">
+      <MarqueeTicker stocks={stocks} />
       <Header
         credits={credits}
         portfolioValue={portfolioValue}
@@ -240,6 +243,8 @@ function App() {
           onTraded={handleTraded}
         />
       )}
+
+      <TradeTicker trades={trades} stocks={stocks} />
     </div>
   )
 }
