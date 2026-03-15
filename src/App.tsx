@@ -15,6 +15,7 @@ import { TradeTicker } from './components/TradeTicker'
 import { MarqueeTicker } from './components/MarqueeTicker'
 import { DisplayNameForm } from './components/DisplayNameForm'
 import { TradeLog } from './components/TradeLog'
+import { ChatBox } from './components/ChatBox'
 
 type Tab = 'all' | 'gainers' | 'losers'
 type Page = 'market' | 'tradelog'
@@ -278,6 +279,7 @@ function App() {
       )}
 
       <TradeTicker trades={trades} stocks={stocks} />
+      <ChatBox userId={session.user.id} displayName={username} />
     </div>
   )
 }

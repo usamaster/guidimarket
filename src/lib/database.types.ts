@@ -31,6 +31,14 @@ export interface Holding {
   avg_buy_price: number
 }
 
+export interface Message {
+  id: string
+  user_id: string
+  display_name: string
+  content: string
+  created_at: string
+}
+
 export interface Trade {
   id: string
   stock_id: string
