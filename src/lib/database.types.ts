@@ -13,16 +13,18 @@ export interface Bet {
   resolved_at: string | null
 }
 
-export interface Database {
-  public: {
-    Tables: {
-      bets: {
-        Row: Bet
-        Insert: Omit<Bet, 'id' | 'created_at' | 'resolved_at' | 'taker' | 'taker_position' | 'winner' | 'status'> & {
-          status?: string
-        }
-        Update: Partial<Bet>
-      }
-    }
-  }
+export type BetInsert = {
+  title: string
+  description: string
+  amount: number
+  creator: string
+  creator_position: 'yes' | 'no'
+}
+
+export type BetUpdate = {
+  taker?: string | null
+  taker_position?: 'yes' | 'no' | null
+  status?: 'open' | 'taken' | 'resolved'
+  winner?: string | null
+  resolved_at?: string | null
 }

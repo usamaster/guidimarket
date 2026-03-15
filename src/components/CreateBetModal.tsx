@@ -30,7 +30,7 @@ export function CreateBetModal({ currentUser, onClose, onCreated }: CreateBetMod
       amount: parseFloat(amount),
       creator: currentUser,
       creator_position: position,
-    })
+    } as Record<string, unknown>)
 
     if (insertError) {
       setError(insertError.message)

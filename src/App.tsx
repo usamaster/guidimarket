@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useSyncExternalStore, useCallback } from 'react'
 import { supabase } from './lib/supabase'
 import type { Bet } from './lib/database.types'
 import { Header } from './components/Header'
@@ -10,11 +10,49 @@ import { UserPicker } from './components/UserPicker'
 const USERS = ['Us', 'Victor', 'Fons', 'Yit', 'Aris'] as const
 const TABS = ['All', 'Open', 'Active', 'Resolved'] as const
 
+let betsCache: { data: Bet[]; loading: boolean } = { data: [], loading: true }
+let listeners: Array<() => void> = []
+let fetchPromise: PromiseLike<void> | null = null
+
+function notifyListeners() {
+  listeners.forEach(l => l())
+}
+
+function fetchBetsFromApi() {
+  if (fetchPromise) return fetchPromise
+  betsCache = { ...betsCache, loading: true }
+  notifyListeners()
+  fetchPromise = supabase
+    .from('bets')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .then(({ data, error }) => {
+      if (!error && data) {
+        betsCache = { data: data as Bet[], loading: false }
+      } else {
+        betsCache = { ...betsCache, loading: false }
+      }
+      notifyListeners()
+      fetchPromise = null
+    })
+  return fetchPromise
+}
+
+fetchBetsFromApi()
+
+function subscribeBets(onStoreChange: () => void) {
+  listeners.push(onStoreChange)
+  return () => { listeners = listeners.filter(l => l !== onStoreChange) }
+}
+
+function getSnapshot() {
+  return betsCache
+}
+
 function App() {
   const [currentUser, setCurrentUser] = useState<string | null>(() => localStorage.getItem('guidimarket_user'))
-  const [bets, setBets] = useState<Bet[]>([])
+  const { data: bets, loading } = useSyncExternalStore(subscribeBets, getSnapshot)
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<string>('All')
 
   const handleSelectUser = (user: string) => {
@@ -27,24 +65,14 @@ function App() {
     setCurrentUser(null)
   }
 
-  const fetchBets = async () => {
-    setLoading(true)
-    const { data, error } = await supabase
-      .from('bets')
-      .select('*')
-      .order('created_at', { ascending: false })
-
-    if (!error && data) setBets(data as Bet[])
-    setLoading(false)
-  }
-
-  useEffect(() => {
-    fetchBets()
+  const refreshBets = useCallback(() => {
+    fetchPromise = null
+    fetchBetsFromApi()
   }, [])
 
   const handleBetCreated = () => {
     setShowCreateModal(false)
-    fetchBets()
+    refreshBets()
   }
 
   const handleTakeBet = async (betId: string, position: 'yes' | 'no') => {
@@ -54,9 +82,9 @@ function App() {
         taker: currentUser,
         taker_position: position,
         status: 'taken',
-      })
+      } as Record<string, unknown>)
       .eq('id', betId)
-    fetchBets()
+    refreshBets()
   }
 
   const filteredBets = bets.filter(b => {
