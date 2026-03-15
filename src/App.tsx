@@ -23,7 +23,7 @@ async function loadAllData(userId: string): Promise<{
   portfolio: Portfolio | null
   holdings: Holding[]
   priceHistory: Record<string, PricePoint[]>
-  leaderboard: { username: string; totalValue: number }[]
+  leaderboard: { username: string; totalValue: number; credits: number; holdings: Holding[] }[]
 }> {
   const [stocksRes, tradesRes, portfolioRes, holdingsRes] = await Promise.all([
     supabase.from('stocks').select('*').order('ticker'),
@@ -46,11 +46,16 @@ async function loadAllData(userId: string): Promise<{
 
   const allPortfolios = await supabase.from('portfolios').select('*')
   const allHoldings = await supabase.from('holdings').select('*')
-  const leaderboard: { username: string; totalValue: number }[] = []
+  const leaderboard: { username: string; totalValue: number; credits: number; holdings: Holding[] }[] = []
   for (const p of (allPortfolios.data || []) as Portfolio[]) {
     const userHoldings = ((allHoldings.data || []) as Holding[]).filter(h => h.user_id === p.user_id)
     const holdingsValue = computePortfolioValue(userHoldings, stocks)
-    leaderboard.push({ username: p.display_name || p.user_id.slice(0, 8), totalValue: Number(p.credits) + holdingsValue })
+    leaderboard.push({
+      username: p.display_name || p.user_id.slice(0, 8),
+      totalValue: Number(p.credits) + holdingsValue,
+      credits: Number(p.credits),
+      holdings: userHoldings,
+    })
   }
 
   return { stocks, trades, portfolio, holdings, priceHistory: histMap, leaderboard }
@@ -65,7 +70,7 @@ function App() {
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null)
   const [holdings, setHoldings] = useState<Holding[]>([])
   const [trades, setTrades] = useState<Trade[]>([])
-  const [leaderboard, setLeaderboard] = useState<{ username: string; totalValue: number }[]>([])
+  const [leaderboard, setLeaderboard] = useState<{ username: string; totalValue: number; credits: number; holdings: Holding[] }[]>([])
 
   const [selectedStock, setSelectedStock] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('all')
@@ -214,7 +219,7 @@ function App() {
               </div>
 
               <aside className="w-64 shrink-0 hidden lg:block space-y-4">
-                <Leaderboard entries={leaderboard} />
+                <Leaderboard entries={leaderboard} stocks={stocks} onStockClick={setSelectedStock} />
                 <PortfolioSidebar
                   holdings={holdings}
                   stocks={stocks}
