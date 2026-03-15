@@ -1,2 +1,2 @@
-export const ADMIN_USER_ID = 'ec2a8840-19cc-420d-8dfb-718398549117'
+export const ADMIN_USER_ID = 'b330e6ae-5ef6-47c4-9e24-0b06fd932908'
 export const USERNAME_DOMAIN = 'guidimarket.app'
