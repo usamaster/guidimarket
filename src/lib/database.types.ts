@@ -19,6 +19,7 @@ export interface Portfolio {
   id: string
   user_id: string
   credits: number
+  display_name: string | null
   created_at: string
 }
 

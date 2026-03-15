@@ -13,18 +13,9 @@ import { Leaderboard } from './components/Leaderboard'
 import { AdminPanel } from './components/AdminPanel'
 import { TradeTicker } from './components/TradeTicker'
 import { MarqueeTicker } from './components/MarqueeTicker'
+import { DisplayNameForm } from './components/DisplayNameForm'
 
 type Tab = 'all' | 'gainers' | 'losers'
-
-async function fetchUsername(userId: string): Promise<string> {
-  const { data } = await supabase
-    .from('trades')
-    .select('username')
-    .eq('user_id', userId)
-    .limit(1)
-  if (data && data.length > 0) return data[0].username
-  return userId.slice(0, 8)
-}
 
 async function loadAllData(userId: string): Promise<{
   stocks: Stock[]
@@ -59,8 +50,7 @@ async function loadAllData(userId: string): Promise<{
   for (const p of (allPortfolios.data || []) as Portfolio[]) {
     const userHoldings = ((allHoldings.data || []) as Holding[]).filter(h => h.user_id === p.user_id)
     const holdingsValue = computePortfolioValue(userHoldings, stocks)
-    const uname = await fetchUsername(p.user_id)
-    leaderboard.push({ username: uname, totalValue: Number(p.credits) + holdingsValue })
+    leaderboard.push({ username: p.display_name || p.user_id.slice(0, 8), totalValue: Number(p.credits) + holdingsValue })
   }
 
   return { stocks, trades, portfolio, holdings, priceHistory: histMap, leaderboard }
@@ -156,7 +146,11 @@ function App() {
     return <LoginScreen onLoggedIn={() => {}} />
   }
 
-  const username = session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'User'
+  if (!loading && portfolio && !portfolio.display_name) {
+    return <DisplayNameForm userId={session.user.id} onSaved={handleTraded} />
+  }
+
+  const username = portfolio?.display_name || session.user.email?.split('@')[0] || 'User'
   const isAdmin = session.user.id === ADMIN_USER_ID
   const credits = portfolio ? Number(portfolio.credits) : 1000
   const portfolioValue = computePortfolioValue(holdings, stocks)
