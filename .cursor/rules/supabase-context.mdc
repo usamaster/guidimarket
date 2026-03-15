@@ -1,0 +1,19 @@
+---
+description: Supabase infrastructure context for GuidiMarket
+alwaysApply: true
+---
+
+# GuidiMarket Supabase Context
+
+Full documentation is in `SUPABASE.md` at the project root. Read it when working with database, auth, or Realtime features.
+
+Key facts:
+- Supabase project ref: `inxcedeyqqbusetvmpxz`
+- DB password: stored in connection string in SUPABASE.md
+- Admin user ID: `b330e6ae-5ef6-47c4-9e24-0b06fd932908` (ufarag@protonmail.com)
+- Admin ID is hardcoded in `src/lib/constants.ts` AND in the `admin_adjust_price()` SQL function
+- Auth: magic link only (no passwords)
+- Realtime enabled on: `stocks`, `trades`, `messages`
+- pg_cron is available but currently disabled (see SUPABASE.md for re-enable commands)
+- RPC functions: `init_portfolio`, `execute_trade`, `admin_adjust_price`, `generate_fake_trades`, `generate_micro_trades`
+- Never place code comments, always stick to initial code patterns
