@@ -1,43 +1,65 @@
 interface HeaderProps {
-  currentUser: string
-  onCreateBet: () => void
+  credits: number
+  portfolioValue: number
+  username: string
+  isAdmin: boolean
+  showAdmin: boolean
+  onToggleAdmin: () => void
   onLogout: () => void
 }
 
-export function Header({ currentUser, onCreateBet, onLogout }: HeaderProps) {
+export function Header({ credits, portfolioValue, username, isAdmin, showAdmin, onToggleAdmin, onLogout }: HeaderProps) {
   return (
     <header className="bg-surface border-b border-border sticky top-0 z-50">
       <div className="max-w-[1200px] mx-auto px-4 h-14 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-6">
-          <span className="text-[22px] font-medium tracking-tight text-dark">
-            guidi<span className="text-primary font-bold">market</span>
-          </span>
-        </div>
+        <span className="text-[22px] font-medium tracking-tight text-dark">
+          guidi<span className="text-primary font-bold">market</span>
+        </span>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onCreateBet}
-            className="bg-primary hover:bg-primary-hover text-white text-sm font-semibold px-4 py-2 rounded-full transition-colors cursor-pointer"
-          >
-            Create a Bet
-          </button>
+        <div className="flex items-center gap-4">
+          <div className="hidden sm:flex items-center gap-4 text-sm">
+            <div>
+              <span className="text-text-muted">Credits</span>{' '}
+              <span className="font-semibold text-dark">{credits.toFixed(2)}</span>
+            </div>
+            <div className="h-4 w-px bg-border" />
+            <div>
+              <span className="text-text-muted">Portfolio</span>{' '}
+              <span className="font-semibold text-dark">{portfolioValue.toFixed(2)}</span>
+            </div>
+          </div>
 
           <div className="h-5 w-px bg-border" />
 
+          {isAdmin && (
+            <button
+              onClick={onToggleAdmin}
+              className={`text-xs font-medium px-3 py-1.5 rounded-full transition-colors cursor-pointer ${
+                showAdmin
+                  ? 'bg-primary text-white'
+                  : 'bg-primary/10 text-primary hover:bg-primary/20'
+              }`}
+            >
+              Admin
+            </button>
+          )}
+
           <div className="flex items-center gap-2">
             <div className="w-7 h-7 rounded-full bg-primary/10 text-primary text-xs font-bold flex items-center justify-center">
-              {currentUser[0]}
+              {username[0]?.toUpperCase()}
             </div>
-            <span className="text-sm font-medium text-dark">{currentUser}</span>
-            <button
-              onClick={onLogout}
-              className="text-text-muted hover:text-dark text-xs ml-1 cursor-pointer transition-colors"
-            >
-              (switch)
-            </button>
+            <span className="text-sm font-medium text-dark hidden sm:inline">{username}</span>
           </div>
+
+          <button
+            onClick={onLogout}
+            className="text-text-muted hover:text-dark text-xs cursor-pointer transition-colors"
+          >
+            Logout
+          </button>
         </div>
       </div>
     </header>
   )
 }
+

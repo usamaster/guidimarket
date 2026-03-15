@@ -1,30 +1,44 @@
-export interface Bet {
+export interface Stock {
   id: string
-  title: string
-  description: string
-  amount: number
-  creator: string
-  creator_position: 'yes' | 'no'
-  status: 'open' | 'taken' | 'resolved'
-  taker: string | null
-  taker_position: 'yes' | 'no' | null
-  winner: string | null
+  ticker: string
+  name: string
+  emoji: string
+  current_price: number
+  previous_close: number
   created_at: string
-  resolved_at: string | null
 }
 
-export type BetInsert = {
-  title: string
-  description: string
-  amount: number
-  creator: string
-  creator_position: 'yes' | 'no'
+export interface PricePoint {
+  id: string
+  stock_id: string
+  price: number
+  created_at: string
 }
 
-export type BetUpdate = {
-  taker?: string | null
-  taker_position?: 'yes' | 'no' | null
-  status?: 'open' | 'taken' | 'resolved'
-  winner?: string | null
-  resolved_at?: string | null
+export interface Portfolio {
+  id: string
+  user_id: string
+  credits: number
+  created_at: string
+}
+
+export interface Holding {
+  id: string
+  user_id: string
+  stock_id: string
+  quantity: number
+  avg_buy_price: number
+}
+
+export interface Trade {
+  id: string
+  stock_id: string
+  user_id: string | null
+  username: string
+  type: 'buy' | 'sell'
+  quantity: number
+  price: number
+  total: number
+  is_fake: boolean
+  created_at: string
 }

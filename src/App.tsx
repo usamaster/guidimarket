@@ -1,132 +1,146 @@
-import { useState, useSyncExternalStore, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
-import type { Bet } from './lib/database.types'
+import { ADMIN_USER_ID } from './lib/constants'
+import type { Stock, PricePoint, Portfolio, Holding, Trade } from './lib/database.types'
 import type { Session } from '@supabase/supabase-js'
 import { Header } from './components/Header'
-import { BetCard } from './components/BetCard'
-import { CreateBetModal } from './components/CreateBetModal'
-import { EmptyState } from './components/EmptyState'
-import { UserPicker } from './components/UserPicker'
+import { computePortfolioValue } from './lib/portfolio'
 import { LoginScreen } from './components/LoginScreen'
+import { StockCard } from './components/StockCard'
+import { StockDetail } from './components/StockDetail'
+import { PortfolioSidebar } from './components/Portfolio'
+import { Leaderboard } from './components/Leaderboard'
+import { AdminPanel } from './components/AdminPanel'
 
-const USERS = ['Us', 'Victor', 'Fons', 'Yit', 'Aris'] as const
-const TABS = ['All', 'Open', 'Active', 'Resolved'] as const
+type Tab = 'all' | 'gainers' | 'losers'
 
-let betsCache: { data: Bet[]; loading: boolean } = { data: [], loading: true }
-let listeners: Array<() => void> = []
-let fetchPromise: PromiseLike<void> | null = null
-
-function notifyListeners() {
-  listeners.forEach(l => l())
+async function fetchUsername(userId: string): Promise<string> {
+  const { data } = await supabase
+    .from('trades')
+    .select('username')
+    .eq('user_id', userId)
+    .limit(1)
+  if (data && data.length > 0) return data[0].username
+  return userId.slice(0, 8)
 }
 
-function fetchBetsFromApi() {
-  if (fetchPromise) return fetchPromise
-  betsCache = { ...betsCache, loading: true }
-  notifyListeners()
-  fetchPromise = supabase
-    .from('bets')
-    .select('*')
-    .order('created_at', { ascending: false })
-    .then(({ data, error }) => {
-      if (!error && data) {
-        betsCache = { data: data as Bet[], loading: false }
-      } else {
-        betsCache = { ...betsCache, loading: false }
-      }
-      notifyListeners()
-      fetchPromise = null
-    })
-  return fetchPromise
-}
+async function loadAllData(userId: string): Promise<{
+  stocks: Stock[]
+  trades: Trade[]
+  portfolio: Portfolio | null
+  holdings: Holding[]
+  priceHistory: Record<string, PricePoint[]>
+  leaderboard: { username: string; totalValue: number }[]
+}> {
+  const [stocksRes, tradesRes, portfolioRes, holdingsRes] = await Promise.all([
+    supabase.from('stocks').select('*').order('ticker'),
+    supabase.from('trades').select('*').order('created_at', { ascending: false }).limit(200),
+    supabase.rpc('init_portfolio', { p_user_id: userId }),
+    supabase.from('holdings').select('*').eq('user_id', userId),
+  ])
 
-function subscribeBets(onStoreChange: () => void) {
-  listeners.push(onStoreChange)
-  return () => { listeners = listeners.filter(l => l !== onStoreChange) }
-}
+  const stocks = (stocksRes.data || []) as Stock[]
+  const trades = (tradesRes.data || []) as Trade[]
+  const portfolio = portfolioRes.data ? (portfolioRes.data as unknown as Portfolio) : null
+  const holdings = (holdingsRes.data || []) as Holding[]
 
-function getSnapshot() {
-  return betsCache
-}
+  const histMap: Record<string, PricePoint[]> = {}
+  const histRes = await supabase.from('price_history').select('*').order('created_at', { ascending: true })
+  for (const p of (histRes.data || []) as PricePoint[]) {
+    if (!histMap[p.stock_id]) histMap[p.stock_id] = []
+    histMap[p.stock_id].push(p)
+  }
 
-let sessionCache: { session: Session | null; loading: boolean } = { session: null, loading: true }
-let sessionListeners: Array<() => void> = []
+  const allPortfolios = await supabase.from('portfolios').select('*')
+  const allHoldings = await supabase.from('holdings').select('*')
+  const leaderboard: { username: string; totalValue: number }[] = []
+  for (const p of (allPortfolios.data || []) as Portfolio[]) {
+    const userHoldings = ((allHoldings.data || []) as Holding[]).filter(h => h.user_id === p.user_id)
+    const holdingsValue = computePortfolioValue(userHoldings, stocks)
+    const uname = await fetchUsername(p.user_id)
+    leaderboard.push({ username: uname, totalValue: Number(p.credits) + holdingsValue })
+  }
 
-function notifySessionListeners() {
-  sessionListeners.forEach(l => l())
-}
-
-supabase.auth.getSession().then(({ data }) => {
-  sessionCache = { session: data.session, loading: false }
-  notifySessionListeners()
-  if (data.session) fetchBetsFromApi()
-})
-
-supabase.auth.onAuthStateChange((_event, session) => {
-  sessionCache = { session, loading: false }
-  notifySessionListeners()
-  if (session) fetchBetsFromApi()
-})
-
-function subscribeSession(onStoreChange: () => void) {
-  sessionListeners.push(onStoreChange)
-  return () => { sessionListeners = sessionListeners.filter(l => l !== onStoreChange) }
-}
-
-function getSessionSnapshot() {
-  return sessionCache
+  return { stocks, trades, portfolio, holdings, priceHistory: histMap, leaderboard }
 }
 
 function App() {
-  const { session, loading: authLoading } = useSyncExternalStore(subscribeSession, getSessionSnapshot)
-  const [currentUser, setCurrentUser] = useState<string | null>(() => localStorage.getItem('guidimarket_user'))
-  const { data: bets, loading } = useSyncExternalStore(subscribeBets, getSnapshot)
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [activeTab, setActiveTab] = useState<string>('All')
+  const [session, setSession] = useState<Session | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
 
-  const handleSelectUser = (user: string) => {
-    localStorage.setItem('guidimarket_user', user)
-    setCurrentUser(user)
-  }
+  const [stocks, setStocks] = useState<Stock[]>([])
+  const [priceHistory, setPriceHistory] = useState<Record<string, PricePoint[]>>({})
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(null)
+  const [holdings, setHoldings] = useState<Holding[]>([])
+  const [trades, setTrades] = useState<Trade[]>([])
+  const [leaderboard, setLeaderboard] = useState<{ username: string; totalValue: number }[]>([])
 
-  const handleLogout = () => {
-    localStorage.removeItem('guidimarket_user')
-    setCurrentUser(null)
-    supabase.auth.signOut()
-  }
+  const [selectedStock, setSelectedStock] = useState<string | null>(null)
+  const [tab, setTab] = useState<Tab>('all')
+  const [showAdmin, setShowAdmin] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [refreshKey, setRefreshKey] = useState(0)
 
-  const refreshBets = useCallback(() => {
-    fetchPromise = null
-    fetchBetsFromApi()
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setSession(data.session)
+      setAuthLoading(false)
+    })
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, s) => {
+      setSession(s)
+      setAuthLoading(false)
+    })
+    return () => subscription.unsubscribe()
   }, [])
 
-  const handleBetCreated = () => {
-    setShowCreateModal(false)
-    refreshBets()
+  useEffect(() => {
+    if (!session) return
+    let cancelled = false
+    loadAllData(session.user.id).then(result => {
+      if (cancelled) return
+      setStocks(result.stocks)
+      setTrades(result.trades)
+      setPortfolio(result.portfolio)
+      setHoldings(result.holdings)
+      setPriceHistory(result.priceHistory)
+      setLeaderboard(result.leaderboard)
+      setLoading(false)
+    })
+    return () => { cancelled = true }
+  }, [session, refreshKey])
+
+  useEffect(() => {
+    if (!session) return
+
+    const stockChannel = supabase
+      .channel('stocks-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stocks' }, (payload) => {
+        if (payload.eventType === 'UPDATE') {
+          const updated = payload.new as Stock
+          setStocks(prev => prev.map(s => s.id === updated.id ? updated : s))
+        }
+      })
+      .subscribe()
+
+    const tradeChannel = supabase
+      .channel('trades-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'trades' }, (payload) => {
+        const newTrade = payload.new as Trade
+        setTrades(prev => [newTrade, ...prev].slice(0, 200))
+      })
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(stockChannel)
+      supabase.removeChannel(tradeChannel)
+    }
+  }, [session])
+
+  const handleTraded = () => setRefreshKey(k => k + 1)
+
+  const handleLogout = () => {
+    supabase.auth.signOut()
   }
-
-  const handleTakeBet = async (betId: string, position: 'yes' | 'no') => {
-    await supabase
-      .from('bets')
-      .update({
-        taker: currentUser,
-        taker_position: position,
-        status: 'taken',
-      } as Record<string, unknown>)
-      .eq('id', betId)
-    refreshBets()
-  }
-
-  const filteredBets = bets.filter(b => {
-    if (activeTab === 'All') return true
-    if (activeTab === 'Open') return b.status === 'open'
-    if (activeTab === 'Active') return b.status === 'taken'
-    if (activeTab === 'Resolved') return b.status === 'resolved'
-    return true
-  })
-
-  const openCount = bets.filter(b => b.status === 'open').length
-  const activeCount = bets.filter(b => b.status === 'taken').length
 
   if (authLoading) {
     return (
@@ -137,121 +151,93 @@ function App() {
   }
 
   if (!session) {
-    return <LoginScreen onLoggedIn={() => { fetchBetsFromApi() }} />
+    return <LoginScreen onLoggedIn={() => {}} />
   }
 
-  if (!currentUser) {
-    return <UserPicker onSelect={handleSelectUser} />
-  }
+  const username = session.user.user_metadata?.username || session.user.email?.split('@')[0] || 'User'
+  const isAdmin = session.user.id === ADMIN_USER_ID
+  const credits = portfolio ? Number(portfolio.credits) : 1000
+  const portfolioValue = computePortfolioValue(holdings, stocks)
+
+  const filteredStocks = stocks.filter(s => {
+    if (tab === 'gainers') return s.current_price > s.previous_close
+    if (tab === 'losers') return s.current_price < s.previous_close
+    return true
+  })
+
+  const selected = stocks.find(s => s.id === selectedStock) || null
+  const selectedHolding = holdings.find(h => h.stock_id === selectedStock)?.quantity || 0
 
   return (
     <div className="min-h-screen bg-bg">
       <Header
-        currentUser={currentUser}
-        onCreateBet={() => setShowCreateModal(true)}
+        credits={credits}
+        portfolioValue={portfolioValue}
+        username={username}
+        isAdmin={isAdmin}
+        showAdmin={showAdmin}
+        onToggleAdmin={() => setShowAdmin(!showAdmin)}
         onLogout={handleLogout}
       />
 
-      <main className="max-w-[1200px] mx-auto px-4 py-6">
-        <div className="flex items-center gap-6 border-b border-border mb-6">
-          {TABS.map(tab => (
-            <button
-              key={tab}
-              onClick={() => setActiveTab(tab)}
-              className={`pb-3 text-sm font-medium transition-colors cursor-pointer relative ${
-                activeTab === tab
-                  ? 'text-dark'
-                  : 'text-text-muted hover:text-text-secondary'
-              }`}
-            >
-              {tab}
-              {tab === 'Open' && openCount > 0 && (
-                <span className="ml-1.5 text-[11px] bg-primary/10 text-primary font-semibold px-1.5 py-0.5 rounded-full">{openCount}</span>
-              )}
-              {tab === 'Active' && activeCount > 0 && (
-                <span className="ml-1.5 text-[11px] bg-yes/10 text-yes font-semibold px-1.5 py-0.5 rounded-full">{activeCount}</span>
-              )}
-              {activeTab === tab && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />
-              )}
-            </button>
-          ))}
-        </div>
+      {showAdmin && isAdmin ? (
+        <AdminPanel stocks={stocks} onUpdate={handleTraded} />
+      ) : (
+        <main className="max-w-[1200px] mx-auto px-4 py-6">
+          <div className="flex items-center gap-6 border-b border-border mb-6">
+            {([['all', 'All'], ['gainers', 'Top Gainers'], ['losers', 'Top Losers']] as const).map(([key, label]) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={`pb-3 text-sm font-medium transition-colors cursor-pointer relative ${tab === key ? 'text-dark' : 'text-text-muted hover:text-text-secondary'}`}
+              >
+                {label}
+                {tab === key && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />}
+              </button>
+            ))}
+          </div>
 
-        {loading ? (
-          <div className="flex justify-center py-20">
-            <div className="w-7 h-7 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin" />
-          </div>
-        ) : bets.length === 0 ? (
-          <EmptyState onCreateBet={() => setShowCreateModal(true)} />
-        ) : filteredBets.length === 0 ? (
-          <div className="text-center py-16">
-            <p className="text-text-muted text-sm">No {activeTab.toLowerCase()} bets</p>
-          </div>
-        ) : (
-          <div className="flex gap-6">
-            <div className="flex-1 min-w-0">
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {filteredBets.map(bet => (
-                  <BetCard
-                    key={bet.id}
-                    bet={bet}
-                    currentUser={currentUser}
-                    onTakeBet={handleTakeBet}
-                  />
-                ))}
-              </div>
+          {loading ? (
+            <div className="flex justify-center py-20">
+              <div className="w-7 h-7 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin" />
             </div>
-
-            <aside className="w-72 shrink-0 hidden lg:block space-y-4">
-              <div className="bg-surface rounded-xl border border-border p-4">
-                <h3 className="text-sm font-semibold text-dark mb-3">Leaderboard</h3>
-                <div className="space-y-2.5">
-                  {(USERS as unknown as string[]).map((user, i) => {
-                    const userBets = bets.filter(b => b.creator === user || b.taker === user)
-                    return (
-                      <div key={user} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-text-muted w-4">{i + 1}</span>
-                          <div className="w-6 h-6 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center">
-                            {user[0]}
-                          </div>
-                          <span className="text-sm font-medium text-dark">{user}</span>
-                        </div>
-                        <span className="text-xs text-text-muted">{userBets.length} bets</span>
-                      </div>
-                    )
-                  })}
+          ) : (
+            <div className="flex gap-6">
+              <div className="flex-1 min-w-0">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                  {filteredStocks.map(stock => (
+                    <StockCard
+                      key={stock.id}
+                      stock={stock}
+                      history={priceHistory[stock.id] || []}
+                      onClick={() => setSelectedStock(stock.id)}
+                    />
+                  ))}
                 </div>
               </div>
 
-              <div className="bg-surface rounded-xl border border-border p-4">
-                <h3 className="text-sm font-semibold text-dark mb-2">How it works</h3>
-                <ol className="space-y-2 text-xs text-text-secondary">
-                  <li className="flex gap-2">
-                    <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">1</span>
-                    Create a bet with a question
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">2</span>
-                    Choose Yes or No and set a stake
-                  </li>
-                  <li className="flex gap-2">
-                    <span className="w-5 h-5 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center shrink-0">3</span>
-                    Someone takes the other side
-                  </li>
-                </ol>
-              </div>
-            </aside>
-          </div>
-        )}
-      </main>
+              <aside className="w-64 shrink-0 hidden lg:block space-y-4">
+                <Leaderboard entries={leaderboard} />
+                <PortfolioSidebar
+                  holdings={holdings}
+                  stocks={stocks}
+                  onStockClick={setSelectedStock}
+                />
+              </aside>
+            </div>
+          )}
+        </main>
+      )}
 
-      {showCreateModal && (
-        <CreateBetModal
-          currentUser={currentUser}
-          onClose={() => setShowCreateModal(false)}
-          onCreated={handleBetCreated}
+      {selected && portfolio && (
+        <StockDetail
+          stock={selected}
+          history={priceHistory[selected.id] || []}
+          trades={trades}
+          portfolio={portfolio}
+          userHolding={selectedHolding}
+          onClose={() => setSelectedStock(null)}
+          onTraded={handleTraded}
         />
       )}
     </div>
