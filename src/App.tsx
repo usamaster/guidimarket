@@ -98,6 +98,9 @@ function App() {
       setSession(s)
       setAuthLoading(false)
     })
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
     return () => subscription.unsubscribe()
   }, [])
 
@@ -162,6 +165,13 @@ function App() {
             gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3)
             osc.stop(ctx.currentTime + 0.3)
           } catch (_) { void _ }
+          if (Notification.permission === 'granted') {
+            new Notification('📰 Breaking News — Landalf Stock Market', { body: item.headline, icon: '/favicon.svg' })
+          } else if (Notification.permission !== 'denied') {
+            Notification.requestPermission().then(perm => {
+              if (perm === 'granted') new Notification('📰 Breaking News — Landalf Stock Market', { body: item.headline, icon: '/favicon.svg' })
+            })
+          }
         }
       })
       .subscribe()
