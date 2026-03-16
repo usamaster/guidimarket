@@ -278,6 +278,7 @@ function App() {
               stocks={stocks}
               onStockClick={setSelectedStock}
             />
+            <EventCalendar events={marketEvents} />
           </aside>
 
           <div className="flex-1 min-w-0 flex flex-col min-h-0">
@@ -331,11 +332,8 @@ function App() {
           </div>
 
           <aside className="w-72 shrink-0 hidden lg:flex flex-col gap-3 p-4 border-l border-border min-h-0">
-            <div className="shrink-0 overflow-y-auto max-h-[30%]">
+            <div className="shrink-0 overflow-y-auto max-h-[45%]">
               <Leaderboard entries={leaderboard} stocks={stocks} onStockClick={setSelectedStock} />
-            </div>
-            <div className="shrink-0 overflow-y-auto max-h-[30%]">
-              <EventCalendar events={marketEvents} />
             </div>
             <div className="flex-1 min-h-0">
               <ChatBox userId={session.user.id} displayName={username} />

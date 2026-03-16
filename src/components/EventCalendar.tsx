@@ -84,19 +84,6 @@ export function EventCalendar({ events }: EventCalendarProps) {
                   </div>
                   <div className="flex items-center gap-1 mt-0.5">
                     <span className="text-[10px] text-text-muted">{timeUntil(ev.scheduled_at, now)}</span>
-                    <span className="text-[10px] text-text-muted">·</span>
-                    {ev.impacts.slice(0, 3).map((imp, i) => {
-                      const up = imp.pct > 0
-                      const neutral = imp.pct === 0
-                      return (
-                        <span
-                          key={i}
-                          className={`text-[9px] font-semibold ${neutral ? 'text-text-muted' : up ? 'text-yes' : 'text-no'}`}
-                        >
-                          {imp.ticker}{!neutral && (up ? '↑' : '↓')}
-                        </span>
-                      )
-                    })}
                   </div>
                 </div>
               </div>
