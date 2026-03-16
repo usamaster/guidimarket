@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
 import { ADMIN_USER_ID } from './lib/constants'
-import type { Stock, PricePoint, Portfolio, Holding, Trade, NewsItem } from './lib/database.types'
+import type { Stock, PricePoint, Portfolio, Holding, Trade, NewsItem, MarketEvent } from './lib/database.types'
 import type { Session } from '@supabase/supabase-js'
 import { Header } from './components/Header'
 import { computePortfolioValue } from './lib/portfolio'
@@ -18,6 +18,7 @@ import { TradeLog } from './components/TradeLog'
 import { ChatBox } from './components/ChatBox'
 import { NewsFeed } from './components/NewsFeed'
 import { NewsSnackbar } from './components/NewsSnackbar'
+import { EventCalendar } from './components/EventCalendar'
 
 type Tab = 'all' | 'gainers' | 'losers'
 type Page = 'market' | 'tradelog' | 'news'
@@ -88,6 +89,7 @@ function App() {
   const [newsItems, setNewsItems] = useState<NewsItem[]>([])
   const [hasUnreadNews, setHasUnreadNews] = useState(false)
   const [snackbarNews, setSnackbarNews] = useState<NewsItem | null>(null)
+  const [marketEvents, setMarketEvents] = useState<MarketEvent[]>([])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -119,6 +121,9 @@ function App() {
     })
     supabase.from('news_items').select('*').eq('published', true).order('published_at', { ascending: false }).then(({ data }) => {
       if (!cancelled && data) setNewsItems(data as NewsItem[])
+    })
+    supabase.from('market_events').select('*').order('scheduled_at', { ascending: true }).then(({ data }) => {
+      if (!cancelled && data) setMarketEvents(data as MarketEvent[])
     })
     return () => { cancelled = true }
   }, [session, refreshKey])
@@ -176,10 +181,19 @@ function App() {
       })
       .subscribe()
 
+    const eventsChannel = supabase
+      .channel('events-realtime')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'market_events' }, (payload) => {
+        const ev = payload.new as MarketEvent
+        setMarketEvents(prev => prev.map(e => e.id === ev.id ? ev : e))
+      })
+      .subscribe()
+
     return () => {
       supabase.removeChannel(stockChannel)
       supabase.removeChannel(tradeChannel)
       supabase.removeChannel(newsChannel)
+      supabase.removeChannel(eventsChannel)
     }
   }, [session])
 
@@ -229,7 +243,7 @@ function App() {
   const selectedHolding = holdings.find(h => h.stock_id === selectedStock)?.quantity || 0
 
   return (
-    <div className="min-h-screen bg-bg">
+    <div className="h-screen flex flex-col bg-bg overflow-hidden">
       <MarqueeTicker stocks={stocks} />
       <Header
         credits={credits}
@@ -245,50 +259,64 @@ function App() {
       />
 
       {showAdmin && isAdmin ? (
-        <AdminPanel stocks={stocks} onUpdate={handleTraded} />
+        <div className="flex-1 overflow-y-auto">
+          <AdminPanel stocks={stocks} onUpdate={handleTraded} />
+        </div>
       ) : page === 'news' ? (
-        <NewsFeed news={newsItems} stocks={stocks} />
+        <div className="flex-1 overflow-y-auto">
+          <NewsFeed news={newsItems} stocks={stocks} />
+        </div>
       ) : page === 'tradelog' ? (
-        <TradeLog trades={trades} stocks={stocks} />
+        <div className="flex-1 overflow-y-auto">
+          <TradeLog trades={trades} stocks={stocks} />
+        </div>
       ) : (
-        <main className="max-w-[1200px] mx-auto px-4 py-6">
-          <div className="flex items-center justify-between border-b border-border mb-6">
-            <div className="flex items-center gap-6">
-              {([['all', 'All'], ['gainers', 'Top Gainers'], ['losers', 'Top Losers']] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setTab(key)}
-                  className={`pb-3 text-sm font-medium transition-colors cursor-pointer relative ${tab === key ? 'text-dark' : 'text-text-muted hover:text-text-secondary'}`}
-                >
-                  {label}
-                  {tab === key && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-1 pb-3">
-              <span className="text-xs text-text-muted mr-1">Sort:</span>
-              {([['name', 'Name'], ['price', 'Price'], ['change', '% Gain'], ['change_desc', '% Loss']] as const).map(([key, label]) => (
-                <button
-                  key={key}
-                  onClick={() => setStockSort(key)}
-                  className={`px-2 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer ${
-                    stockSort === key ? 'bg-primary/10 text-primary' : 'text-text-muted hover:text-dark hover:bg-bg'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
+        <main className="flex-1 flex min-h-0">
+          <aside className="w-56 shrink-0 hidden xl:flex flex-col p-4 gap-3 overflow-y-auto border-r border-border">
+            <PortfolioSidebar
+              holdings={holdings}
+              stocks={stocks}
+              onStockClick={setSelectedStock}
+            />
+          </aside>
 
-          {loading ? (
-            <div className="flex justify-center py-20">
-              <div className="w-7 h-7 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin" />
+          <div className="flex-1 min-w-0 flex flex-col min-h-0">
+            <div className="flex items-center justify-between border-b border-border px-4 shrink-0">
+              <div className="flex items-center gap-6">
+                {([['all', 'All'], ['gainers', 'Top Gainers'], ['losers', 'Top Losers']] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setTab(key)}
+                    className={`pb-3 pt-3 text-sm font-medium transition-colors cursor-pointer relative ${tab === key ? 'text-dark' : 'text-text-muted hover:text-text-secondary'}`}
+                  >
+                    {label}
+                    {tab === key && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary rounded-full" />}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-1">
+                <span className="text-xs text-text-muted mr-1">Sort:</span>
+                {([['name', 'Name'], ['price', 'Price'], ['change', '% Gain'], ['change_desc', '% Loss']] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    onClick={() => setStockSort(key)}
+                    className={`px-2 py-1 rounded text-[11px] font-medium transition-colors cursor-pointer ${
+                      stockSort === key ? 'bg-primary/10 text-primary' : 'text-text-muted hover:text-dark hover:bg-bg'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
-          ) : (
-            <div className="flex gap-6">
-              <div className="flex-1 min-w-0 space-y-4">
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+
+            {loading ? (
+              <div className="flex justify-center py-20">
+                <div className="w-7 h-7 border-[3px] border-primary/20 border-t-primary rounded-full animate-spin" />
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto p-4">
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
                   {filteredStocks.map(stock => (
                     <StockCard
                       key={stock.id}
@@ -298,23 +326,21 @@ function App() {
                     />
                   ))}
                 </div>
-                {holdings.length > 0 && (
-                  <PortfolioSidebar
-                    holdings={holdings}
-                    stocks={stocks}
-                    onStockClick={setSelectedStock}
-                  />
-                )}
               </div>
+            )}
+          </div>
 
-              <aside className="w-72 shrink-0 hidden lg:flex flex-col gap-4 h-[calc(100vh-8rem)] sticky top-20">
-                <Leaderboard entries={leaderboard} stocks={stocks} onStockClick={setSelectedStock} />
-                <div className="flex-1 min-h-0">
-                  <ChatBox userId={session.user.id} displayName={username} />
-                </div>
-              </aside>
+          <aside className="w-72 shrink-0 hidden lg:flex flex-col gap-3 p-4 border-l border-border min-h-0">
+            <div className="shrink-0 overflow-y-auto max-h-[30%]">
+              <Leaderboard entries={leaderboard} stocks={stocks} onStockClick={setSelectedStock} />
             </div>
-          )}
+            <div className="shrink-0 overflow-y-auto max-h-[30%]">
+              <EventCalendar events={marketEvents} />
+            </div>
+            <div className="flex-1 min-h-0">
+              <ChatBox userId={session.user.id} displayName={username} />
+            </div>
+          </aside>
         </main>
       )}
 

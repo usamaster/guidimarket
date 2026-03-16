@@ -39,6 +39,18 @@ export interface Message {
   created_at: string
 }
 
+export interface MarketEvent {
+  id: string
+  title: string
+  description: string
+  scheduled_at: string
+  impacts: { stock_id: string; ticker: string; pct: number }[]
+  news_headline: string
+  executed: boolean
+  executed_at: string | null
+  created_at: string
+}
+
 export interface NewsItem {
   id: string
   headline: string
