@@ -14,7 +14,7 @@ interface HeaderProps {
 export function Header({ credits, portfolioValue, username, isAdmin, showAdmin, page, hasUnreadNews, onPageChange, onToggleAdmin, onLogout }: HeaderProps) {
   return (
     <header className="bg-surface border-b border-border sticky top-0 z-50">
-      <div className="max-w-[1200px] mx-auto px-4 h-14 flex items-center justify-between gap-4">
+      <div className="w-full px-4 h-14 flex items-center justify-between gap-4">
         <div className="flex items-center gap-5">
           <span className="text-[22px] font-medium tracking-tight text-dark cursor-pointer" onClick={() => onPageChange('market')}>
             Landalf<span className="text-primary font-bold"> Stock Market</span>

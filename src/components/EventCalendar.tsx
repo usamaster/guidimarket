@@ -55,7 +55,7 @@ export function EventCalendar({ events }: EventCalendarProps) {
           {recent.map(ev => (
             <div key={ev.id} className="flex items-start gap-2 py-1 opacity-50">
               <div className="w-1 h-1 rounded-full bg-text-muted mt-1.5 shrink-0" />
-              <div className="text-[10px] text-text-muted line-through truncate">{ev.title}</div>
+              <div className="text-[10px] text-text-muted line-through truncate" title={ev.title}>{ev.title}</div>
             </div>
           ))}
         </div>
@@ -77,7 +77,7 @@ export function EventCalendar({ events }: EventCalendarProps) {
                 <div className={`w-1.5 h-1.5 rounded-full mt-1 shrink-0 ${isSoon ? 'bg-primary animate-pulse' : 'bg-border'}`} />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center justify-between gap-1">
-                    <span className="text-[11px] font-medium text-dark truncate">{ev.title}</span>
+                    <span className="text-[11px] font-medium text-dark truncate" title={ev.title}>{ev.title}</span>
                     <span className={`text-[10px] whitespace-nowrap shrink-0 ${isSoon ? 'text-primary font-bold' : 'text-text-muted'}`}>
                       {timeStr(ev.scheduled_at)}
                     </span>
