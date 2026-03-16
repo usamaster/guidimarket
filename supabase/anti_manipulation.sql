@@ -21,7 +21,7 @@ DECLARE
   v_last_trade timestamptz;
   v_daily_volume int;
   v_max_quantity int := 50;
-  v_cooldown_seconds int := 15;
+  v_cooldown_seconds int := 5;
   v_daily_limit int := 200;
 BEGIN
   IF p_quantity < 1 THEN
