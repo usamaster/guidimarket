@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createChart, type IChartApi, type UTCTimestamp, ColorType, LineStyle, LineSeries } from 'lightweight-charts'
 import type { Stock, PricePoint, Trade, Portfolio } from '../lib/database.types'
 import { supabase } from '../lib/supabase'
+import { MAX_TRADE_QUANTITY, TRADE_COOLDOWN_MS } from '../lib/constants'
 
 interface StockDetailProps {
   stock: Stock
@@ -20,11 +21,32 @@ export function StockDetail({ stock, history, trades, portfolio, userHolding, on
   const [qty, setQty] = useState('1')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [cooldownEnd, setCooldownEnd] = useState(0)
+  const [cooldownLeft, setCooldownLeft] = useState(0)
 
-  const quantity = Math.max(1, Math.floor(Number(qty) || 0))
+  const quantity = Math.min(MAX_TRADE_QUANTITY, Math.max(1, Math.floor(Number(qty) || 0)))
   const total = stock.current_price * quantity
   const canBuy = portfolio.credits >= total
   const canSell = userHolding >= quantity
+  const priceImpact = 0.5 * Math.sqrt(quantity)
+  const onCooldown = cooldownLeft > 0
+
+  useEffect(() => {
+    if (cooldownEnd <= Date.now()) return
+    const tick = () => {
+      const left = Math.max(0, cooldownEnd - Date.now())
+      setCooldownLeft(left)
+      if (left <= 0) return
+      requestAnimationFrame(tick)
+    }
+    tick()
+  }, [cooldownEnd])
+
+  const startCooldown = useCallback(() => {
+    const end = Date.now() + TRADE_COOLDOWN_MS
+    setCooldownEnd(end)
+    setCooldownLeft(TRADE_COOLDOWN_MS)
+  }, [])
 
   useEffect(() => {
     if (!chartRef.current) return
@@ -58,6 +80,7 @@ export function StockDetail({ stock, history, trades, portfolio, userHolding, on
   }, [history, stock])
 
   const handleTrade = async () => {
+    if (onCooldown) return
     setError('')
     setSubmitting(true)
     const { error: rpcError } = await supabase.rpc('execute_trade', {
@@ -71,6 +94,7 @@ export function StockDetail({ stock, history, trades, portfolio, userHolding, on
       setSubmitting(false)
       return
     }
+    startCooldown()
     setSubmitting(false)
     onTraded()
   }
@@ -120,10 +144,14 @@ export function StockDetail({ stock, history, trades, portfolio, userHolding, on
 
               <div className="space-y-3">
                 <div>
-                  <label className="text-xs font-medium text-text-secondary mb-1 block">Shares</label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-medium text-text-secondary">Shares</label>
+                    <span className="text-[10px] text-text-muted">max {MAX_TRADE_QUANTITY}</span>
+                  </div>
                   <input
                     type="number"
                     min="1"
+                    max={MAX_TRADE_QUANTITY}
                     value={qty}
                     onChange={e => setQty(e.target.value)}
                     className="w-full border border-border rounded-lg px-3 py-2 text-sm text-dark focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
@@ -136,6 +164,12 @@ export function StockDetail({ stock, history, trades, portfolio, userHolding, on
                 <div className="flex justify-between text-xs text-text-muted">
                   <span>Total</span>
                   <span className="text-dark font-bold">{total.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-text-muted">
+                  <span>Est. price impact</span>
+                  <span className={tab === 'buy' ? 'text-yes font-medium' : 'text-no font-medium'}>
+                    {tab === 'buy' ? '+' : '-'}{priceImpact.toFixed(2)}%
+                  </span>
                 </div>
                 {tab === 'buy' && (
                   <div className="flex justify-between text-xs text-text-muted">
@@ -151,14 +185,14 @@ export function StockDetail({ stock, history, trades, portfolio, userHolding, on
                 )}
                 <button
                   onClick={handleTrade}
-                  disabled={submitting || (tab === 'buy' ? !canBuy : !canSell)}
+                  disabled={submitting || onCooldown || (tab === 'buy' ? !canBuy : !canSell)}
                   className={`w-full py-2.5 rounded-lg text-sm font-semibold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-default ${
                     tab === 'buy'
                       ? 'bg-yes hover:bg-yes-hover text-white'
                       : 'bg-no hover:bg-no-hover text-white'
                   }`}
                 >
-                  {submitting ? 'Processing...' : tab === 'buy' ? `Buy ${quantity} shares` : `Sell ${quantity} shares`}
+                  {submitting ? 'Processing...' : onCooldown ? `Wait ${Math.ceil(cooldownLeft / 1000)}s` : tab === 'buy' ? `Buy ${quantity} shares` : `Sell ${quantity} shares`}
                 </button>
               </div>
             </div>
