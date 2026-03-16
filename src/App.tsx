@@ -260,6 +260,7 @@ function App() {
                   stocks={stocks}
                   onStockClick={setSelectedStock}
                 />
+                <ChatBox userId={session.user.id} displayName={username} />
               </aside>
             </div>
           )}
@@ -279,7 +280,6 @@ function App() {
       )}
 
       <TradeTicker trades={trades} stocks={stocks} />
-      <ChatBox userId={session.user.id} displayName={username} />
     </div>
   )
 }

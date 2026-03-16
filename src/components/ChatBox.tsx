@@ -54,12 +54,10 @@ export function ChatBox({ userId, displayName }: ChatBoxProps) {
   }
 
   return (
-    <div className="fixed bottom-4 left-4 z-50 w-80 h-96 bg-surface rounded-xl border border-border shadow-xl flex flex-col overflow-hidden">
-      <div className="px-4 py-3 border-b border-border bg-dark text-white">
-        <h3 className="text-sm font-semibold">Chat</h3>
-      </div>
+    <div className="bg-surface rounded-xl border border-border p-4">
+      <h3 className="text-xs font-semibold text-dark mb-3">Chat</h3>
 
-      <div className="flex-1 overflow-y-auto px-3 py-2 space-y-2">
+      <div className="h-48 overflow-y-auto space-y-2 mb-3">
         {messages.length === 0 && (
           <p className="text-xs text-text-muted text-center mt-8">No messages yet. Say hi!</p>
         )}
@@ -68,37 +66,34 @@ export function ChatBox({ userId, displayName }: ChatBoxProps) {
           return (
             <div key={m.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
               <span className="text-[10px] text-text-muted mb-0.5">{m.display_name}</span>
-              <div className={`max-w-[85%] px-3 py-1.5 rounded-xl text-sm break-words ${
+              <div className={`max-w-[85%] px-2.5 py-1 rounded-lg text-xs break-words ${
                 isMe
                   ? 'bg-primary text-white rounded-br-sm'
                   : 'bg-bg text-dark rounded-bl-sm'
               }`}>
                 {m.content}
               </div>
-              <span className="text-[9px] text-text-muted mt-0.5">
-                {new Date(m.created_at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
-              </span>
             </div>
           )
         })}
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={handleSend} className="px-3 py-2 border-t border-border flex gap-2">
+      <form onSubmit={handleSend} className="flex gap-1.5">
         <input
           type="text"
           value={input}
           onChange={e => setInput(e.target.value)}
           placeholder="Type a message..."
           maxLength={500}
-          className="flex-1 border border-border rounded-lg px-3 py-2 text-sm bg-surface text-dark placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
+          className="flex-1 min-w-0 border border-border rounded-lg px-2.5 py-1.5 text-xs bg-surface text-dark placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
         />
         <button
           type="submit"
           disabled={sending || !input.trim()}
-          className="px-3 py-2 rounded-lg bg-primary hover:bg-primary-hover disabled:opacity-40 text-white text-sm font-semibold transition-colors cursor-pointer"
+          className="px-2.5 py-1.5 rounded-lg bg-primary hover:bg-primary-hover disabled:opacity-40 text-white text-xs font-semibold transition-colors cursor-pointer"
         >
-          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
           </svg>
         </button>
