@@ -12,6 +12,7 @@ DECLARE
   v_stock stocks%ROWTYPE;
   v_portfolio portfolios%ROWTYPE;
   v_holding holdings%ROWTYPE;
+  v_exec_price numeric;
   v_total numeric;
   v_new_price numeric;
   v_impact numeric;
@@ -69,9 +70,13 @@ BEGIN
   END IF;
 
   v_username := COALESCE(v_portfolio.display_name, 'Unknown');
-  v_total := v_stock.current_price * p_quantity;
+  v_impact := 0.005 * sqrt(p_quantity::numeric);
 
   IF p_type = 'buy' THEN
+    v_new_price := v_stock.current_price * (1.0 + v_impact);
+    v_exec_price := v_new_price;
+    v_total := v_exec_price * p_quantity;
+
     IF v_portfolio.credits < v_total THEN
       RAISE EXCEPTION 'Insufficient credits';
     END IF;
@@ -90,11 +95,8 @@ BEGIN
       WHERE user_id = p_user_id AND stock_id = p_stock_id;
     ELSE
       INSERT INTO holdings (user_id, stock_id, quantity, avg_buy_price)
-      VALUES (p_user_id, p_stock_id, p_quantity, v_stock.current_price);
+      VALUES (p_user_id, p_stock_id, p_quantity, v_exec_price);
     END IF;
-
-    v_impact := 0.005 * sqrt(p_quantity::numeric);
-    v_new_price := v_stock.current_price * (1.0 + v_impact);
 
   ELSE
     SELECT * INTO v_holding FROM holdings
@@ -103,6 +105,13 @@ BEGIN
     IF NOT FOUND OR v_holding.quantity < p_quantity THEN
       RAISE EXCEPTION 'Insufficient shares';
     END IF;
+
+    v_new_price := v_stock.current_price * (1.0 - v_impact);
+    IF v_new_price < 0.01 THEN
+      v_new_price := 0.01;
+    END IF;
+    v_exec_price := v_new_price;
+    v_total := v_exec_price * p_quantity;
 
     UPDATE portfolios
     SET credits = credits + v_total
@@ -116,13 +125,6 @@ BEGIN
       SET quantity = quantity - p_quantity
       WHERE user_id = p_user_id AND stock_id = p_stock_id;
     END IF;
-
-    v_impact := 0.005 * sqrt(p_quantity::numeric);
-    v_new_price := v_stock.current_price * (1.0 - v_impact);
-  END IF;
-
-  IF v_new_price < 0.01 THEN
-    v_new_price := 0.01;
   END IF;
 
   UPDATE stocks SET current_price = v_new_price WHERE id = p_stock_id;
@@ -130,7 +132,7 @@ BEGIN
   INSERT INTO price_history (stock_id, price) VALUES (p_stock_id, v_new_price);
 
   INSERT INTO trades (stock_id, user_id, username, type, quantity, price, total, is_fake)
-  VALUES (p_stock_id, p_user_id, v_username, p_type, p_quantity, v_stock.current_price, v_total, false)
+  VALUES (p_stock_id, p_user_id, v_username, p_type, p_quantity, v_exec_price, v_total, false)
   RETURNING * INTO v_trade;
 
   RETURN NEXT v_trade;

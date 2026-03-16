@@ -25,10 +25,13 @@ export function StockDetail({ stock, history, trades, portfolio, userHolding, on
   const [cooldownLeft, setCooldownLeft] = useState(0)
 
   const quantity = Math.min(MAX_TRADE_QUANTITY, Math.max(1, Math.floor(Number(qty) || 0)))
-  const total = stock.current_price * quantity
+  const priceImpact = 0.5 * Math.sqrt(quantity)
+  const execPrice = tab === 'buy'
+    ? stock.current_price * (1 + priceImpact / 100)
+    : stock.current_price * (1 - priceImpact / 100)
+  const total = execPrice * quantity
   const canBuy = portfolio.credits >= total
   const canSell = userHolding >= quantity
-  const priceImpact = 0.5 * Math.sqrt(quantity)
   const onCooldown = cooldownLeft > 0
 
   useEffect(() => {
@@ -158,18 +161,16 @@ export function StockDetail({ stock, history, trades, portfolio, userHolding, on
                   />
                 </div>
                 <div className="flex justify-between text-xs text-text-muted">
-                  <span>Price per share</span>
+                  <span>Market price</span>
                   <span className="text-dark font-medium">{Number(stock.current_price).toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-text-muted">
+                  <span>Exec. price <span className="text-[10px]">({tab === 'buy' ? '+' : '-'}{priceImpact.toFixed(2)}%)</span></span>
+                  <span className={`font-medium ${tab === 'buy' ? 'text-no' : 'text-yes'}`}>{execPrice.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-xs text-text-muted">
                   <span>Total</span>
                   <span className="text-dark font-bold">{total.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-text-muted">
-                  <span>Est. price impact</span>
-                  <span className={tab === 'buy' ? 'text-yes font-medium' : 'text-no font-medium'}>
-                    {tab === 'buy' ? '+' : '-'}{priceImpact.toFixed(2)}%
-                  </span>
                 </div>
                 {tab === 'buy' && (
                   <div className="flex justify-between text-xs text-text-muted">
