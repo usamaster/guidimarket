@@ -97,9 +97,15 @@ Picks 3-5 random stocks, creates fake buy/sell trades (qty 1-5) with bot names (
 ### `generate_micro_trades() → void`
 Picks 5-10 random stocks, creates single-unit fake trades with smaller impact (0.05-0.2%). Bot names: FloorTrader, ScalpKing, NanoTrader, etc.
 
+### `publish_next_news() → void`
+Picks a random unpublished news item, sets `published = true` and `published_at = now()`, then applies all stock price impacts from the item's `impacts` JSONB array. Called by pg_cron every ~13 minutes.
+
 ## Cron Jobs (pg_cron)
 
-Currently **disabled**. To re-enable:
+**Active:**
+- `news-publisher` — runs every 13 minutes, calls `publish_next_news()` to release a random news item and apply stock impacts
+
+**Disabled** (fake trades). To re-enable:
 
 ```sql
 -- Every 2 minutes: larger fake trades
@@ -126,6 +132,7 @@ Supabase Realtime is enabled on these tables (via `supabase_realtime` publicatio
 - `stocks` — price updates push to all clients
 - `trades` — new trades appear in ticker/feed
 - `messages` — chat messages broadcast instantly
+- `news_items` — when a news item is published (UPDATE with published=true), all clients get a snackbar + sound notification
 
 Frontend subscribes in `App.tsx` (stocks + trades channels) and `ChatBox.tsx` (messages channel).
 
@@ -170,3 +177,5 @@ The stocks were seeded via `scripts/migrate.mjs` (deleted after use). They inclu
 | `src/components/TradeTicker.tsx` | Toast notifications for new trades |
 | `src/components/MarqueeTicker.tsx` | Scrolling stock ticker bar |
 | `src/components/ChatBox.tsx` | Floating real-time chat |
+| `src/components/NewsFeed.tsx` | News page: published items with images, sentiment badges |
+| `src/components/NewsSnackbar.tsx` | Breaking news toast notification on new publish |

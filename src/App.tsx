@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from './lib/supabase'
 import { ADMIN_USER_ID } from './lib/constants'
-import type { Stock, PricePoint, Portfolio, Holding, Trade } from './lib/database.types'
+import type { Stock, PricePoint, Portfolio, Holding, Trade, NewsItem } from './lib/database.types'
 import type { Session } from '@supabase/supabase-js'
 import { Header } from './components/Header'
 import { computePortfolioValue } from './lib/portfolio'
@@ -16,9 +16,11 @@ import { MarqueeTicker } from './components/MarqueeTicker'
 import { DisplayNameForm } from './components/DisplayNameForm'
 import { TradeLog } from './components/TradeLog'
 import { ChatBox } from './components/ChatBox'
+import { NewsFeed } from './components/NewsFeed'
+import { NewsSnackbar } from './components/NewsSnackbar'
 
 type Tab = 'all' | 'gainers' | 'losers'
-type Page = 'market' | 'tradelog'
+type Page = 'market' | 'tradelog' | 'news'
 type StockSort = 'name' | 'price' | 'change' | 'change_desc'
 
 async function loadAllData(userId: string): Promise<{
@@ -83,6 +85,9 @@ function App() {
   const [showAdmin, setShowAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [newsItems, setNewsItems] = useState<NewsItem[]>([])
+  const [hasUnreadNews, setHasUnreadNews] = useState(false)
+  const [snackbarNews, setSnackbarNews] = useState<NewsItem | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -109,6 +114,9 @@ function App() {
       setLeaderboard(result.leaderboard)
       setLoading(false)
     })
+    supabase.from('news_items').select('*').eq('published', true).order('published_at', { ascending: false }).then(({ data }) => {
+      if (!cancelled && data) setNewsItems(data as NewsItem[])
+    })
     return () => { cancelled = true }
   }, [session, refreshKey])
 
@@ -133,9 +141,35 @@ function App() {
       })
       .subscribe()
 
+    const newsChannel = supabase
+      .channel('news-realtime')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'news_items' }, (payload) => {
+        const item = payload.new as NewsItem
+        if (item.published) {
+          setNewsItems(prev => [item, ...prev.filter(n => n.id !== item.id)])
+          setHasUnreadNews(true)
+          setSnackbarNews(item)
+          try {
+            const ctx = new AudioContext()
+            const osc = ctx.createOscillator()
+            const gain = ctx.createGain()
+            osc.connect(gain)
+            gain.connect(ctx.destination)
+            osc.frequency.value = 880
+            osc.type = 'sine'
+            gain.gain.value = 0.15
+            osc.start()
+            gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3)
+            osc.stop(ctx.currentTime + 0.3)
+          } catch (_) { void _ }
+        }
+      })
+      .subscribe()
+
     return () => {
       supabase.removeChannel(stockChannel)
       supabase.removeChannel(tradeChannel)
+      supabase.removeChannel(newsChannel)
     }
   }, [session])
 
@@ -194,13 +228,16 @@ function App() {
         isAdmin={isAdmin}
         showAdmin={showAdmin}
         page={page}
-        onPageChange={p => { setPage(p as Page); setShowAdmin(false) }}
+        hasUnreadNews={hasUnreadNews}
+        onPageChange={p => { setPage(p as Page); setShowAdmin(false); if (p === 'news') setHasUnreadNews(false) }}
         onToggleAdmin={() => setShowAdmin(!showAdmin)}
         onLogout={handleLogout}
       />
 
       {showAdmin && isAdmin ? (
         <AdminPanel stocks={stocks} onUpdate={handleTraded} />
+      ) : page === 'news' ? (
+        <NewsFeed news={newsItems} stocks={stocks} />
       ) : page === 'tradelog' ? (
         <TradeLog trades={trades} stocks={stocks} />
       ) : (
@@ -253,14 +290,18 @@ function App() {
                 </div>
               </div>
 
-              <aside className="w-64 shrink-0 hidden lg:block space-y-4">
-                <Leaderboard entries={leaderboard} stocks={stocks} onStockClick={setSelectedStock} />
-                <PortfolioSidebar
-                  holdings={holdings}
-                  stocks={stocks}
-                  onStockClick={setSelectedStock}
-                />
-                <ChatBox userId={session.user.id} displayName={username} />
+              <aside className="w-72 shrink-0 hidden lg:flex flex-col gap-4 max-h-[calc(100vh-8rem)] sticky top-20">
+                <div className="overflow-y-auto space-y-4 min-h-0 flex-shrink">
+                  <Leaderboard entries={leaderboard} stocks={stocks} onStockClick={setSelectedStock} />
+                  <PortfolioSidebar
+                    holdings={holdings}
+                    stocks={stocks}
+                    onStockClick={setSelectedStock}
+                  />
+                </div>
+                <div className="flex-1 min-h-[280px]">
+                  <ChatBox userId={session.user.id} displayName={username} />
+                </div>
               </aside>
             </div>
           )}
@@ -280,6 +321,11 @@ function App() {
       )}
 
       <TradeTicker trades={trades} stocks={stocks} />
+      <NewsSnackbar
+        item={snackbarNews}
+        onDismiss={() => setSnackbarNews(null)}
+        onNavigate={() => { setPage('news'); setHasUnreadNews(false) }}
+      />
     </div>
   )
 }

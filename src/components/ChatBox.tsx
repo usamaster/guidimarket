@@ -54,10 +54,10 @@ export function ChatBox({ userId, displayName }: ChatBoxProps) {
   }
 
   return (
-    <div className="bg-surface rounded-xl border border-border p-4">
-      <h3 className="text-xs font-semibold text-dark mb-3">Chat</h3>
+    <div className="bg-surface rounded-xl border border-border p-4 h-full flex flex-col">
+      <h3 className="text-xs font-semibold text-dark mb-3 shrink-0">Chat</h3>
 
-      <div className="h-48 overflow-y-auto space-y-2 mb-3">
+      <div className="flex-1 overflow-y-auto space-y-2 mb-3 min-h-0">
         {messages.length === 0 && (
           <p className="text-xs text-text-muted text-center mt-8">No messages yet. Say hi!</p>
         )}

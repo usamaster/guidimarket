@@ -39,6 +39,16 @@ export interface Message {
   created_at: string
 }
 
+export interface NewsItem {
+  id: string
+  headline: string
+  image_url: string | null
+  impacts: { stock_id: string; ticker: string; pct: number }[]
+  published: boolean
+  published_at: string | null
+  created_at: string
+}
+
 export interface Trade {
   id: string
   stock_id: string
