@@ -287,7 +287,7 @@ function App() {
             </div>
           ) : (
             <div className="flex gap-6">
-              <div className="flex-1 min-w-0">
+              <div className="flex-1 min-w-0 space-y-4">
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
                   {filteredStocks.map(stock => (
                     <StockCard
@@ -298,18 +298,18 @@ function App() {
                     />
                   ))}
                 </div>
-              </div>
-
-              <aside className="w-72 shrink-0 hidden lg:flex flex-col gap-4 max-h-[calc(100vh-8rem)] sticky top-20">
-                <div className="overflow-y-auto space-y-4 min-h-0 flex-shrink">
-                  <Leaderboard entries={leaderboard} stocks={stocks} onStockClick={setSelectedStock} />
+                {holdings.length > 0 && (
                   <PortfolioSidebar
                     holdings={holdings}
                     stocks={stocks}
                     onStockClick={setSelectedStock}
                   />
-                </div>
-                <div className="flex-1 min-h-[280px]">
+                )}
+              </div>
+
+              <aside className="w-72 shrink-0 hidden lg:flex flex-col gap-4 h-[calc(100vh-8rem)] sticky top-20">
+                <Leaderboard entries={leaderboard} stocks={stocks} onStockClick={setSelectedStock} />
+                <div className="flex-1 min-h-0">
                   <ChatBox userId={session.user.id} displayName={username} />
                 </div>
               </aside>
