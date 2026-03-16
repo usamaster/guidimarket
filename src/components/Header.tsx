@@ -12,7 +12,10 @@ interface HeaderProps {
 }
 
 export function Header({ credits, portfolioValue, username, isAdmin, showAdmin, page, hasUnreadNews, onPageChange, onToggleAdmin, onLogout }: HeaderProps) {
+  const navItems = [['market', '📈', 'Market'], ['news', '📰', 'Nieuws'], ['tradelog', '📋', 'Trades']] as const
+
   return (
+    <>
     <header className="bg-surface border-b border-border sticky top-0 z-50">
       <div className="w-full px-4 h-14 flex items-center justify-between gap-4">
         <div className="flex items-center gap-5">
@@ -20,7 +23,7 @@ export function Header({ credits, portfolioValue, username, isAdmin, showAdmin, 
             Landalf<span className="text-primary font-bold"> Stock Market</span>
           </span>
           <nav className="hidden sm:flex items-center gap-1">
-            {([['market', 'Market'], ['news', '📰 Nieuws'], ['tradelog', 'Trade Log']] as const).map(([key, label]) => (
+            {navItems.map(([key, , label]) => (
               <button
                 key={key}
                 onClick={() => onPageChange(key)}
@@ -81,5 +84,24 @@ export function Header({ credits, portfolioValue, username, isAdmin, showAdmin, 
         </div>
       </div>
     </header>
+
+    <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-surface border-t border-border flex items-center justify-around h-12">
+      {navItems.map(([key, icon, label]) => (
+        <button
+          key={key}
+          onClick={() => onPageChange(key)}
+          className={`relative flex flex-col items-center gap-0.5 px-4 py-1 cursor-pointer transition-colors ${
+            page === key ? 'text-primary' : 'text-text-muted'
+          }`}
+        >
+          <span className="text-base">{icon}</span>
+          <span className="text-[10px] font-medium">{label}</span>
+          {key === 'news' && hasUnreadNews && page !== 'news' && (
+            <span className="absolute top-0.5 right-2 w-2 h-2 bg-primary rounded-full animate-pulse" />
+          )}
+        </button>
+      ))}
+    </nav>
+    </>
   )
 }
