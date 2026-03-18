@@ -16,17 +16,27 @@ const BALL_R = 8
 const WIDTH = (COLS + 1) * PIN_GAP
 const HEIGHT = (ROWS + 4) * PIN_GAP
 
-const MULTIPLIERS = [
-  110, 41, 10, 5, 3, 1.5, 1, 0.3, 1, 1.5, 3, 5, 10, 41, 110,
+const ODDS_SETS: { name: string; color: string; mults: number[] }[] = [
+  { name: '🟢 Mild', color: '#22c55e', mults: [8, 4, 2, 1.5, 1, 0.5, 0.3, 0.2, 0.3, 0.5, 1, 1.5, 2, 4, 8] },
+  { name: '🔵 Standard', color: '#3b82f6', mults: [15, 5, 3, 1.5, 1, 0.5, 0.3, 0.1, 0.3, 0.5, 1, 1.5, 3, 5, 15] },
+  { name: '🟠 Spicy', color: '#f97316', mults: [25, 8, 3, 1, 0.5, 0.3, 0.2, 0.1, 0.2, 0.3, 0.5, 1, 3, 8, 25] },
+  { name: '🔴 Brutal', color: '#ef4444', mults: [50, 10, 3, 0.5, 0.3, 0.2, 0.1, 0, 0.1, 0.2, 0.3, 0.5, 3, 10, 50] },
+  { name: '💀 Degen', color: '#a855f7', mults: [100, 15, 2, 0.3, 0.1, 0, 0, 0, 0, 0, 0.1, 0.3, 2, 15, 100] },
+  { name: '🧊 Tight', color: '#64748b', mults: [5, 2, 1, 0.5, 0.3, 0.2, 0.1, 0.1, 0.1, 0.2, 0.3, 0.5, 1, 2, 5] },
 ]
 
-const SLOT_COLORS = MULTIPLIERS.map(m => {
-  if (m >= 41) return '#ef4444'
-  if (m >= 10) return '#f97316'
-  if (m >= 3) return '#eab308'
-  if (m >= 1.5) return '#22c55e'
-  return '#6b7280'
-})
+function pickOddsSet() {
+  return ODDS_SETS[Math.floor(Math.random() * ODDS_SETS.length)]
+}
+
+function slotColor(m: number): string {
+  if (m >= 25) return '#ef4444'
+  if (m >= 8) return '#f97316'
+  if (m >= 2) return '#eab308'
+  if (m >= 0.5) return '#22c55e'
+  if (m > 0) return '#6b7280'
+  return '#374151'
+}
 
 interface Ball {
   id: number
@@ -43,10 +53,26 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
   const [bet, setBet] = useState(BET_OPTIONS[0])
   const [balls, setBalls] = useState<Ball[]>([])
   const [lastWin, setLastWin] = useState<{ amount: number; multiplier: number } | null>(null)
+  const [oddsSet, setOddsSet] = useState(() => pickOddsSet())
+  const [oddsNotice, setOddsNotice] = useState('')
+  const [dropCount, setDropCount] = useState(0)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const ballIdRef = useRef(0)
   const animRef = useRef<number>(0)
   const ballsRef = useRef<Ball[]>([])
+  const oddsRef = useRef(oddsSet)
+  const dropCountRef = useRef(0)
+
+  useEffect(() => { oddsRef.current = oddsSet }, [oddsSet])
+
+  const rotateOdds = useCallback(() => {
+    let next = pickOddsSet()
+    while (next.name === oddsRef.current.name && ODDS_SETS.length > 1) next = pickOddsSet()
+    oddsRef.current = next
+    setOddsSet(next)
+    setOddsNotice(`Odds shifted → ${next.name}`)
+    setTimeout(() => setOddsNotice(''), 3000)
+  }, [])
 
   const getPins = useCallback(() => {
     const pins: { x: number; y: number }[] = []
@@ -63,6 +89,11 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
   const drop = useCallback(() => {
     if (credits < bet) return
     onCreditsChange(-bet)
+
+    dropCountRef.current += 1
+    setDropCount(dropCountRef.current)
+    if (dropCountRef.current % 10 === 0) rotateOdds()
+
     const newBall: Ball = {
       id: ++ballIdRef.current,
       x: WIDTH / 2 + (Math.random() - 0.5) * 10,
@@ -75,7 +106,7 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
     }
     ballsRef.current = [...ballsRef.current, newBall]
     setBalls([...ballsRef.current])
-  }, [credits, bet, onCreditsChange])
+  }, [credits, bet, onCreditsChange, rotateOdds])
 
   useEffect(() => {
     const pins = getPins()
@@ -121,7 +152,7 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
 
         if (y >= bottomY) {
           const slot = Math.min(COLS - 1, Math.max(0, Math.floor(x / slotWidth)))
-          const mult = MULTIPLIERS[slot]
+          const mult = oddsRef.current.mults[slot]
           const winAmount = ball.bet * mult
           onCreditsChange(winAmount)
           setLastWin({ amount: winAmount, multiplier: mult })
@@ -131,11 +162,10 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
         return { ...ball, x, y, vx, vy }
       })
 
-      const alive = updated.filter(b => !b.landed || Date.now() % 3000 < 2500)
       ballsRef.current = updated
       if (changed) setBalls([...updated])
 
-      if (alive.length > 0 || updated.some(b => !b.landed)) {
+      if (updated.some(b => !b.landed)) {
         animRef.current = requestAnimationFrame(tick)
       }
 
@@ -165,17 +195,19 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
       ctx.fill()
     }
 
+    const mults = oddsSet.mults
     const slotWidth = WIDTH / COLS
     const bottomY = (ROWS + 2.5) * PIN_GAP
     for (let i = 0; i < COLS; i++) {
-      ctx.fillStyle = SLOT_COLORS[i]
+      const sc = slotColor(mults[i])
+      ctx.fillStyle = sc
       ctx.globalAlpha = 0.25
       ctx.fillRect(i * slotWidth, bottomY, slotWidth, PIN_GAP * 1.5)
       ctx.globalAlpha = 1
-      ctx.fillStyle = SLOT_COLORS[i]
+      ctx.fillStyle = sc
       ctx.font = 'bold 10px system-ui'
       ctx.textAlign = 'center'
-      ctx.fillText(`${MULTIPLIERS[i]}x`, i * slotWidth + slotWidth / 2, bottomY + PIN_GAP)
+      ctx.fillText(`${mults[i]}x`, i * slotWidth + slotWidth / 2, bottomY + PIN_GAP)
     }
 
     for (const ball of balls) {
@@ -188,7 +220,9 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
       ctx.lineWidth = 1.5
       ctx.stroke()
     }
-  }, [balls, getPins])
+  }, [balls, getPins, oddsSet])
+
+  const coinsUntilShift = 10 - (dropCount % 10)
 
   return (
     <div className="p-4 max-w-xl mx-auto">
@@ -210,14 +244,25 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
         ))}
       </div>
 
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between mb-2">
         <span className="text-sm text-text-muted">Balance: <span className="font-bold text-dark">{credits.toFixed(2)}</span></span>
         {lastWin && (
           <span className={`text-sm font-bold ${lastWin.multiplier >= 3 ? 'text-yes' : lastWin.multiplier >= 1 ? 'text-dark' : 'text-no'}`}>
-            {lastWin.multiplier}x → +{lastWin.amount.toFixed(2)}
+            {lastWin.multiplier}x → {lastWin.amount > 0 ? '+' : ''}{lastWin.amount.toFixed(2)}
           </span>
         )}
       </div>
+
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-xs font-medium" style={{ color: oddsSet.color }}>{oddsSet.name}</span>
+        <span className="text-[10px] text-text-muted">Shifts in {coinsUntilShift} coin{coinsUntilShift !== 1 ? 's' : ''}</span>
+      </div>
+
+      {oddsNotice && (
+        <div className="text-center text-sm font-bold mb-2 animate-pulse" style={{ color: oddsSet.color }}>
+          {oddsNotice}
+        </div>
+      )}
 
       <div className="bg-surface border border-border rounded-xl p-2 overflow-hidden">
         <canvas
