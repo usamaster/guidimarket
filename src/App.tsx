@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from './lib/supabase'
 import { ADMIN_USER_ID } from './lib/constants'
-import type { Stock, PricePoint, Portfolio, Holding, Trade, NewsItem, MarketEvent } from './lib/database.types'
+import type { Stock, PricePoint, Portfolio, Holding, Trade, NewsItem, MarketEvent, Loan } from './lib/database.types'
 import type { Session } from '@supabase/supabase-js'
 import { Header } from './components/Header'
 import { computePortfolioValue } from './lib/portfolio'
@@ -19,9 +19,13 @@ import { ChatBox } from './components/ChatBox'
 import { NewsFeed } from './components/NewsFeed'
 import { NewsSnackbar } from './components/NewsSnackbar'
 import { EventCalendar } from './components/EventCalendar'
+import { CasinoPage } from './components/CasinoPage'
+import { LoanSharkPage } from './components/LoanSharkPage'
+import { LoanPopup } from './components/LoanPopup'
+import { LoanToast } from './components/LoanToast'
 
 type Tab = 'all' | 'gainers' | 'losers'
-type Page = 'market' | 'tradelog' | 'news'
+type Page = 'market' | 'tradelog' | 'news' | 'casino' | 'loans'
 type StockSort = 'name' | 'price' | 'change' | 'change_desc'
 
 async function loadAllData(userId: string): Promise<{
@@ -90,6 +94,10 @@ function App() {
   const [hasUnreadNews, setHasUnreadNews] = useState(false)
   const [snackbarNews, setSnackbarNews] = useState<NewsItem | null>(null)
   const [marketEvents, setMarketEvents] = useState<MarketEvent[]>([])
+  const [loans, setLoans] = useState<Loan[]>([])
+  const [showLoanPopup, setShowLoanPopup] = useState(false)
+  const [loanToast, setLoanToast] = useState<Loan | null>(null)
+  const loanPopupShownRef = useRef(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -124,6 +132,19 @@ function App() {
     })
     supabase.from('market_events').select('*').order('scheduled_at', { ascending: true }).then(({ data }) => {
       if (!cancelled && data) setMarketEvents(data as MarketEvent[])
+    })
+    supabase.from('loans').select('*').order('created_at', { ascending: false }).then(({ data }) => {
+      if (!cancelled && data) {
+        setLoans(data as Loan[])
+        const uid = session?.user?.id
+        if (uid && !loanPopupShownRef.current) {
+          const hasRelevant = (data as Loan[]).some(l =>
+            (l.status === 'open' && l.borrower_id !== uid && !l.denied_by.some(d => d.user_id === uid)) ||
+            (l.status === 'funded' && l.borrower_id === uid)
+          )
+          if (hasRelevant) { setShowLoanPopup(true); loanPopupShownRef.current = true }
+        }
+      }
     })
     return () => { cancelled = true }
   }, [session, refreshKey])
@@ -189,15 +210,50 @@ function App() {
       })
       .subscribe()
 
+    const loansChannel = supabase
+      .channel('loans-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'loans' }, (payload) => {
+        const loan = payload.new as Loan
+        setLoans(prev => [loan, ...prev])
+        if (loan.borrower_id !== session?.user?.id) setLoanToast(loan)
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'loans' }, (payload) => {
+        const loan = payload.new as Loan
+        setLoans(prev => prev.map(l => l.id === loan.id ? loan : l))
+        const uid = session?.user?.id
+        if (uid && (
+          (loan.status === 'funded' && loan.borrower_id === uid) ||
+          (loan.status === 'repaid' && loan.lender_id === uid)
+        )) {
+          setLoanToast(loan)
+        }
+      })
+      .subscribe()
+
     return () => {
       supabase.removeChannel(stockChannel)
       supabase.removeChannel(tradeChannel)
       supabase.removeChannel(newsChannel)
       supabase.removeChannel(eventsChannel)
+      supabase.removeChannel(loansChannel)
     }
   }, [session])
 
   const handleTraded = () => setRefreshKey(k => k + 1)
+
+  const refreshLoans = () => {
+    supabase.from('loans').select('*').order('created_at', { ascending: false }).then(({ data }) => {
+      if (data) setLoans(data as Loan[])
+    })
+    setRefreshKey(k => k + 1)
+  }
+
+  const handleCreditsChange = async (delta: number) => {
+    if (!portfolio) return
+    const newCredits = Math.max(0, Number(portfolio.credits) + delta)
+    setPortfolio({ ...portfolio, credits: newCredits })
+    await supabase.from('portfolios').update({ credits: newCredits } as Record<string, unknown>).eq('user_id', portfolio.user_id)
+  }
 
   const handleLogout = () => {
     supabase.auth.signOut()
@@ -269,6 +325,14 @@ function App() {
       ) : page === 'tradelog' ? (
         <div className="flex-1 overflow-y-auto">
           <TradeLog trades={trades} stocks={stocks} />
+        </div>
+      ) : page === 'casino' ? (
+        <div className="flex-1 overflow-y-auto">
+          <CasinoPage credits={credits} onCreditsChange={handleCreditsChange} />
+        </div>
+      ) : page === 'loans' ? (
+        <div className="flex-1 overflow-y-auto">
+          <LoanSharkPage loans={loans} userId={session.user.id} displayName={username} credits={credits} onRefresh={refreshLoans} />
         </div>
       ) : (
         <main className="flex-1 flex min-h-0">
@@ -360,6 +424,27 @@ function App() {
         onDismiss={() => setSnackbarNews(null)}
         onNavigate={() => { setPage('news'); setHasUnreadNews(false) }}
       />
+
+      {showLoanPopup && (
+        <LoanPopup
+          loans={loans}
+          userId={session.user.id}
+          displayName={username}
+          credits={credits}
+          onDismiss={() => setShowLoanPopup(false)}
+          onNavigate={() => { setPage('loans'); setShowLoanPopup(false) }}
+          onRefresh={refreshLoans}
+        />
+      )}
+
+      {loanToast && (
+        <LoanToast
+          loan={loanToast}
+          userId={session.user.id}
+          onDismiss={() => setLoanToast(null)}
+          onNavigate={() => setPage('loans')}
+        />
+      )}
     </div>
   )
 }

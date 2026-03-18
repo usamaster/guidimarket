@@ -12,7 +12,7 @@ interface HeaderProps {
 }
 
 export function Header({ credits, portfolioValue, username, isAdmin, showAdmin, page, hasUnreadNews, onPageChange, onToggleAdmin, onLogout }: HeaderProps) {
-  const navItems = [['market', '📈', 'Market'], ['news', '📰', 'Nieuws'], ['tradelog', '📋', 'Trades']] as const
+  const navItems = [['market', '📈', 'Market'], ['news', '📰', 'Nieuws'], ['tradelog', '📋', 'Trades'], ['casino', '🎰', 'Casino'], ['loans', '🦈', 'Loanshark']] as const
 
   return (
     <>

@@ -61,6 +61,24 @@ export interface NewsItem {
   created_at: string
 }
 
+export interface Loan {
+  id: string
+  borrower_id: string
+  borrower_name: string
+  lender_id: string | null
+  lender_name: string | null
+  amount: number
+  interest_pct: number
+  total_repay: number
+  message: string | null
+  status: 'open' | 'funded' | 'repaid' | 'cancelled'
+  denied_by: { user_id: string; display_name: string }[]
+  funded_at: string | null
+  repaid_at: string | null
+  due_at: string | null
+  created_at: string
+}
+
 export interface Trade {
   id: string
   stock_id: string
