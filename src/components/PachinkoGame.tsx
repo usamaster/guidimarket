@@ -96,9 +96,9 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
 
     const newBall: Ball = {
       id: ++ballIdRef.current,
-      x: WIDTH / 2 + (Math.random() - 0.5) * 10,
+      x: WIDTH / 2 + (Math.random() - 0.5) * 6,
       y: PIN_GAP * 0.5,
-      vx: (Math.random() - 0.5) * 0.5,
+      vx: (Math.random() - 0.5) * 0.2,
       vy: 0,
       bet,
       landed: false,
@@ -110,9 +110,9 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
 
   useEffect(() => {
     const pins = getPins()
-    const gravity = 0.15
-    const friction = 0.99
-    const bounce = 0.5
+    const gravity = 0.12
+    const friction = 0.97
+    const bounce = 0.4
 
     const slotWidth = WIDTH / COLS
     const bottomY = (ROWS + 2.5) * PIN_GAP
@@ -143,7 +143,7 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
             const dot = vx * nx + vy * ny
             vx -= 2 * dot * nx * bounce
             vy -= 2 * dot * ny * bounce
-            vx += (Math.random() - 0.5) * 1.2
+            vx += (Math.random() - 0.5) * 0.6
           }
         }
 
