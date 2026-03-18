@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './lib/supabase'
 import { ADMIN_USER_ID } from './lib/constants'
-import type { Stock, PricePoint, Portfolio, Holding, Trade, NewsItem, MarketEvent, Loan } from './lib/database.types'
+import type { Stock, PricePoint, Portfolio, Holding, Trade, NewsItem, MarketEvent, Loan, Bankruptcy } from './lib/database.types'
 import type { Session } from '@supabase/supabase-js'
 import { Header } from './components/Header'
 import { computePortfolioValue } from './lib/portfolio'
@@ -23,6 +23,8 @@ import { CasinoPage } from './components/CasinoPage'
 import { LoanSharkPage } from './components/LoanSharkPage'
 import { LoanPopup } from './components/LoanPopup'
 import { LoanToast } from './components/LoanToast'
+import { BankruptcyPopup } from './components/BankruptcyPopup'
+import { VotePopup } from './components/VotePopup'
 
 type Tab = 'all' | 'gainers' | 'losers'
 type Page = 'market' | 'tradelog' | 'news' | 'casino' | 'loans'
@@ -90,6 +92,7 @@ function App() {
   const [showAdmin, setShowAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
   const [refreshKey, setRefreshKey] = useState(0)
+  const [clockNow, setClockNow] = useState(() => Date.now())
   const [newsItems, setNewsItems] = useState<NewsItem[]>([])
   const [hasUnreadNews, setHasUnreadNews] = useState(false)
   const [snackbarNews, setSnackbarNews] = useState<NewsItem | null>(null)
@@ -98,6 +101,28 @@ function App() {
   const [showLoanPopup, setShowLoanPopup] = useState(false)
   const [loanToast, setLoanToast] = useState<Loan | null>(null)
   const loanPopupShownRef = useRef(false)
+  const [bankruptcies, setBankruptcies] = useState<Bankruptcy[]>([])
+  const [pendingVote, setPendingVote] = useState<Bankruptcy | null>(null)
+  const [creditFlash, setCreditFlash] = useState(false)
+  const prevCreditsRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    const interval = setInterval(() => setClockNow(Date.now()), 30_000)
+    return () => clearInterval(interval)
+  }, [])
+
+  useEffect(() => {
+    if (prevCreditsRef.current !== null && portfolio) {
+      const cur = Number(portfolio.credits)
+      if (cur < prevCreditsRef.current) {
+        const t1 = setTimeout(() => setCreditFlash(true), 0)
+        const t2 = setTimeout(() => setCreditFlash(false), 2000)
+        prevCreditsRef.current = cur
+        return () => { clearTimeout(t1); clearTimeout(t2) }
+      }
+    }
+    if (portfolio) prevCreditsRef.current = Number(portfolio.credits)
+  }, [portfolio])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -145,6 +170,9 @@ function App() {
           if (hasRelevant) { setShowLoanPopup(true); loanPopupShownRef.current = true }
         }
       }
+    })
+    supabase.from('bankruptcies').select('*').eq('status', 'pending').order('created_at', { ascending: false }).then(({ data }) => {
+      if (!cancelled && data) setBankruptcies(data as Bankruptcy[])
     })
     return () => { cancelled = true }
   }, [session, refreshKey])
@@ -230,12 +258,30 @@ function App() {
       })
       .subscribe()
 
+    const bankruptcyChannel = supabase
+      .channel('bankruptcy-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'bankruptcies' }, (payload) => {
+        const b = payload.new as Bankruptcy
+        setBankruptcies(prev => [b, ...prev])
+        if (b.user_id !== session?.user?.id) setPendingVote(b)
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'bankruptcies' }, (payload) => {
+        const b = payload.new as Bankruptcy
+        setBankruptcies(prev => prev.map(x => x.id === b.id ? b : x))
+        if (b.status === 'approved') {
+          setBankruptcies(prev => prev.filter(x => x.id !== b.id))
+          if (b.user_id === session?.user?.id) setRefreshKey(k => k + 1)
+        }
+      })
+      .subscribe()
+
     return () => {
       supabase.removeChannel(stockChannel)
       supabase.removeChannel(tradeChannel)
       supabase.removeChannel(newsChannel)
       supabase.removeChannel(eventsChannel)
       supabase.removeChannel(loansChannel)
+      supabase.removeChannel(bankruptcyChannel)
     }
   }, [session])
 
@@ -244,6 +290,9 @@ function App() {
   const refreshLoans = () => {
     supabase.from('loans').select('*').order('created_at', { ascending: false }).then(({ data }) => {
       if (data) setLoans(data as Loan[])
+    })
+    supabase.from('bankruptcies').select('*').eq('status', 'pending').order('created_at', { ascending: false }).then(({ data }) => {
+      if (data) setBankruptcies(data as Bankruptcy[])
     })
     setRefreshKey(k => k + 1)
   }
@@ -279,6 +328,10 @@ function App() {
   const isAdmin = session.user.id === ADMIN_USER_ID
   const credits = portfolio ? Number(portfolio.credits) : 1000
   const portfolioValue = computePortfolioValue(holdings, stocks)
+  const hasLateLoan = loans.some(l => l.status === 'funded' && l.borrower_id === session.user.id && l.funded_at && (clockNow - new Date(l.funded_at).getTime()) > 2 * 60 * 60 * 1000)
+  const isBankrupt = credits <= 0 && hasLateLoan
+  const myPendingBankruptcy = bankruptcies.find(b => b.user_id === session.user.id && b.status === 'pending')
+  const otherPendingBankruptcy = pendingVote || bankruptcies.find(b => b.user_id !== session.user.id && b.status === 'pending' && !b.votes.some(v => v.user_id === session.user.id))
 
   const pctChange = (s: Stock) => s.previous_close > 0 ? ((s.current_price - s.previous_close) / s.previous_close) * 100 : 0
 
@@ -309,6 +362,8 @@ function App() {
         showAdmin={showAdmin}
         page={page}
         hasUnreadNews={hasUnreadNews}
+        hasLateLoan={hasLateLoan}
+        creditFlash={creditFlash}
         onPageChange={p => { setPage(p as Page); setShowAdmin(false); if (p === 'news') setHasUnreadNews(false) }}
         onToggleAdmin={() => setShowAdmin(!showAdmin)}
         onLogout={handleLogout}
@@ -443,6 +498,34 @@ function App() {
           userId={session.user.id}
           onDismiss={() => setLoanToast(null)}
           onNavigate={() => setPage('loans')}
+        />
+      )}
+
+      {isBankrupt && !myPendingBankruptcy && (
+        <BankruptcyPopup
+          userId={session.user.id}
+          displayName={username}
+          onSubmitted={refreshLoans}
+        />
+      )}
+
+      {myPendingBankruptcy && (
+        <VotePopup
+          bankruptcy={myPendingBankruptcy}
+          userId={session.user.id}
+          displayName={username}
+          onVoted={refreshLoans}
+          onDismiss={() => {}}
+        />
+      )}
+
+      {!isBankrupt && !myPendingBankruptcy && otherPendingBankruptcy && (
+        <VotePopup
+          bankruptcy={otherPendingBankruptcy}
+          userId={session.user.id}
+          displayName={username}
+          onVoted={() => { refreshLoans(); setPendingVote(null) }}
+          onDismiss={() => setPendingVote(null)}
         />
       )}
     </div>

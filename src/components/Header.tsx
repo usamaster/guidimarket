@@ -6,13 +6,15 @@ interface HeaderProps {
   showAdmin: boolean
   page: string
   hasUnreadNews: boolean
+  hasLateLoan: boolean
+  creditFlash: boolean
   onPageChange: (page: string) => void
   onToggleAdmin: () => void
   onLogout: () => void
 }
 
-export function Header({ credits, portfolioValue, username, isAdmin, showAdmin, page, hasUnreadNews, onPageChange, onToggleAdmin, onLogout }: HeaderProps) {
-  const navItems = [['market', '📈', 'Market'], ['news', '📰', 'Nieuws'], ['tradelog', '📋', 'Trades'], ['casino', '🎰', 'Casino'], ['loans', '🦈', 'Loanshark']] as const
+export function Header({ credits, portfolioValue, username, isAdmin, showAdmin, page, hasUnreadNews, hasLateLoan, creditFlash, onPageChange, onToggleAdmin, onLogout }: HeaderProps) {
+  const navItems = [['market', '📈', 'Market'], ['news', '📰', 'Nieuws'], ['tradelog', '📋', 'Trades'], ['casino', '🎰', 'Casino'], ['loans', '🦈', 'Loans']] as const
 
   return (
     <>
@@ -35,6 +37,9 @@ export function Header({ credits, portfolioValue, username, isAdmin, showAdmin, 
                 {key === 'news' && hasUnreadNews && page !== 'news' && (
                   <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-primary rounded-full animate-pulse" />
                 )}
+                {key === 'loans' && hasLateLoan && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse" />
+                )}
               </button>
             ))}
           </nav>
@@ -42,9 +47,9 @@ export function Header({ credits, portfolioValue, username, isAdmin, showAdmin, 
 
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex items-center gap-4 text-sm">
-            <div>
+            <div className={`px-2 py-0.5 rounded-lg transition-colors ${creditFlash ? 'bg-red-500/20 animate-pulse' : ''}`}>
               <span className="text-text-muted">Credits</span>{' '}
-              <span className="font-semibold text-dark">{credits.toFixed(2)}</span>
+              <span className={`font-semibold ${creditFlash || hasLateLoan ? 'text-red-500' : 'text-dark'}`}>{credits.toFixed(2)}</span>
             </div>
             <div className="h-4 w-px bg-border" />
             <div>
@@ -98,6 +103,9 @@ export function Header({ credits, portfolioValue, username, isAdmin, showAdmin, 
           <span className="text-[10px] font-medium">{label}</span>
           {key === 'news' && hasUnreadNews && page !== 'news' && (
             <span className="absolute top-0.5 right-2 w-2 h-2 bg-primary rounded-full animate-pulse" />
+          )}
+          {key === 'loans' && hasLateLoan && (
+            <span className="absolute top-0.5 right-2 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
           )}
         </button>
       ))}

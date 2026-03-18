@@ -61,6 +61,16 @@ export interface NewsItem {
   created_at: string
 }
 
+export interface Bankruptcy {
+  id: string
+  user_id: string
+  display_name: string
+  apology: string
+  status: 'pending' | 'approved' | 'denied'
+  votes: { user_id: string; display_name: string; vote: 'yes' | 'no' }[]
+  created_at: string
+}
+
 export interface Loan {
   id: string
   borrower_id: string

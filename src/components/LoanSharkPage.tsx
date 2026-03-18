@@ -281,8 +281,14 @@ export function LoanSharkPage({ loans, userId, displayName, credits, onRefresh }
             <p className="text-sm text-text-muted py-6 text-center">No active loans</p>
           ) : activeLoans.map(loan => {
             const isBorrower = loan.borrower_id === userId
+            const isLate = loan.funded_at ? (now - new Date(loan.funded_at).getTime()) > 2 * 60 * 60 * 1000 : false
+            const penaltyPerMin = Math.round(loan.amount * 0.01 * 100) / 100
             return (
-              <div key={loan.id} className={`rounded-xl p-4 border ${isBorrower ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'}`}>
+              <div key={loan.id} className={`rounded-xl p-4 border transition-colors ${
+                isLate && isBorrower ? 'bg-red-50 border-red-400 animate-pulse' :
+                isLate && !isBorrower ? 'bg-red-50 border-red-300' :
+                isBorrower ? 'bg-yellow-50 border-yellow-200' : 'bg-green-50 border-green-200'
+              }`}>
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <div className="text-xs text-text-muted mb-1">
@@ -295,18 +301,34 @@ export function LoanSharkPage({ loans, userId, displayName, credits, onRefresh }
                     <span className="text-sm text-text-muted ml-1">credits</span>
                     <span className="text-xs text-text-muted ml-2">→ repay {loan.total_repay.toFixed(2)}</span>
                     {loan.funded_at && <span className="text-[10px] text-text-muted ml-2">funded {timeAgo(loan.funded_at)}</span>}
+                    {isLate && (
+                      <div className="mt-1.5 text-xs font-bold text-red-600">
+                        ⚠️ OVERDUE — losing {penaltyPerMin}/min until repaid!
+                      </div>
+                    )}
+                    {isLate && !isBorrower && (
+                      <div className="mt-1 text-[10px] text-red-500">
+                        {loan.borrower_name} is being charged penalties
+                      </div>
+                    )}
                   </div>
                   {isBorrower && (
                     <button
                       onClick={() => handleRepay(loan)}
                       disabled={loading || credits < loan.total_repay}
-                      className="bg-primary hover:bg-primary-hover disabled:opacity-40 text-white font-semibold px-4 py-2 rounded-lg text-xs cursor-pointer transition-colors"
+                      className={`font-semibold px-4 py-2 rounded-lg text-xs cursor-pointer transition-colors ${
+                        isLate
+                          ? 'bg-red-600 hover:bg-red-700 text-white animate-pulse disabled:opacity-40'
+                          : 'bg-primary hover:bg-primary-hover disabled:opacity-40 text-white'
+                      }`}
                     >
-                      Repay {loan.total_repay.toFixed(2)}
+                      {isLate ? '🚨 Repay NOW' : 'Repay'} {loan.total_repay.toFixed(2)}
                     </button>
                   )}
                   {!isBorrower && (
-                    <span className="text-xs font-medium text-text-muted bg-bg px-3 py-2 rounded-lg">Waiting for repayment</span>
+                    <span className={`text-xs font-medium px-3 py-2 rounded-lg ${isLate ? 'bg-red-100 text-red-600' : 'bg-bg text-text-muted'}`}>
+                      {isLate ? 'Overdue!' : 'Waiting for repayment'}
+                    </span>
                   )}
                 </div>
               </div>
