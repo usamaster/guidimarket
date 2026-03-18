@@ -9,25 +9,25 @@ interface PachinkoGameProps {
 const BET_OPTIONS = [1, 2, 5, 8, 10, 20, 50, 100]
 
 const ROWS = 12
-const COLS = ROWS + 3
-const PIN_GAP = 36
+const COLS = ROWS + 1
+const PIN_GAP = 38
 const PIN_R = 4
 const BALL_R = 7
-const WIDTH = (COLS + 1) * PIN_GAP
+const WIDTH = (COLS + 2) * PIN_GAP
 const HEIGHT = (ROWS + 4) * PIN_GAP
 
-const ODDS_SETS: { id: string; name: string; color: string; mults: number[] }[] = [
-  { id: 'mild',     name: '🟢 Mild',     color: '#22c55e', mults: [8, 4, 2, 1.5, 1, 0.5, 0.3, 0.2, 0.3, 0.5, 1, 1.5, 2, 4, 8] },
-  { id: 'standard', name: '🔵 Standard', color: '#3b82f6', mults: [15, 5, 3, 1.5, 1, 0.5, 0.3, 0.1, 0.3, 0.5, 1, 1.5, 3, 5, 15] },
-  { id: 'spicy',    name: '🟠 Spicy',    color: '#f97316', mults: [25, 8, 3, 1, 0.5, 0.3, 0.2, 0.1, 0.2, 0.3, 0.5, 1, 3, 8, 25] },
-  { id: 'brutal',   name: '🔴 Brutal',   color: '#ef4444', mults: [50, 10, 3, 0.5, 0.3, 0.2, 0.1, 0, 0.1, 0.2, 0.3, 0.5, 3, 10, 50] },
-  { id: 'degen',    name: '💀 Degen',    color: '#a855f7', mults: [100, 15, 2, 0.3, 0.1, 0, 0, 0, 0, 0, 0.1, 0.3, 2, 15, 100] },
-  { id: 'tight',    name: '🧊 Tight',    color: '#64748b', mults: [5, 2, 1, 0.5, 0.3, 0.2, 0.1, 0.1, 0.1, 0.2, 0.3, 0.5, 1, 2, 5] },
+const ODDS_SETS: { id: string; name: string; color: string; edge: string; mults: number[] }[] = [
+  { id: 'mild',     name: '🟢 Mild',     color: '#22c55e', edge: '~7%',  mults: [30, 10, 3, 1.5, 1, 0.7, 0.4, 0.7, 1, 1.5, 3, 10, 30] },
+  { id: 'standard', name: '🔵 Standard', color: '#3b82f6', edge: '~9%',  mults: [170, 18, 5, 1.6, 0.8, 0.4, 0.2, 0.4, 0.8, 1.6, 5, 18, 170] },
+  { id: 'spicy',    name: '🟠 Spicy',    color: '#f97316', edge: '~13%', mults: [600, 25, 4, 1, 0.4, 0.2, 0.1, 0.2, 0.4, 1, 4, 25, 600] },
+  { id: 'brutal',   name: '🔴 Brutal',   color: '#ef4444', edge: '~22%', mults: [1000, 15, 2, 0.5, 0.2, 0.1, 0, 0.1, 0.2, 0.5, 2, 15, 1000] },
+  { id: 'degen',    name: '💀 Degen',    color: '#a855f7', edge: '~28%', mults: [1300, 8, 0.8, 0.1, 0, 0, 0, 0, 0, 0.1, 0.8, 8, 1300] },
+  { id: 'tight',    name: '🧊 Tight',    color: '#64748b', edge: '~10%', mults: [15, 5, 3, 1.5, 1, 0.7, 0.4, 0.7, 1, 1.5, 3, 5, 15] },
 ]
 
 function slotColor(m: number): string {
-  if (m >= 25) return '#ef4444'
-  if (m >= 8) return '#f97316'
+  if (m >= 100) return '#ef4444'
+  if (m >= 10) return '#f97316'
   if (m >= 2) return '#eab308'
   if (m >= 0.5) return '#22c55e'
   if (m > 0) return '#6b7280'
@@ -39,7 +39,7 @@ function galtonSlot(): number {
   for (let i = 0; i < ROWS; i++) {
     pos += Math.random() < 0.5 ? -1 : 1
   }
-  const slot = Math.round((pos + ROWS) / 2)
+  const slot = (pos + ROWS) / 2
   return Math.max(0, Math.min(COLS - 1, slot))
 }
 
@@ -55,12 +55,12 @@ interface AnimBall {
 function buildPath(slot: number): { x: number; y: number }[] {
   const pts: { x: number; y: number }[] = []
   const startX = WIDTH / 2
-  const startY = PIN_GAP * 0.5
-  pts.push({ x: startX, y: startY })
+  pts.push({ x: startX, y: PIN_GAP * 0.5 })
 
+  const center = ROWS / 2
+  const target = slot - center
   let pos = 0
   const steps: number[] = []
-  let target = slot - Math.floor(COLS / 2)
 
   for (let i = 0; i < ROWS; i++) {
     const remaining = ROWS - i
@@ -72,7 +72,6 @@ function buildPath(slot: number): { x: number; y: number }[] {
     const step = goRight ? 1 : -1
     pos += step
     steps.push(step)
-    target = slot - Math.floor(COLS / 2)
   }
 
   let cumPos = 0
@@ -82,7 +81,7 @@ function buildPath(slot: number): { x: number; y: number }[] {
     const rowOffsetX = (WIDTH - (count - 1) * PIN_GAP) / 2
     const centerPin = (count - 1) / 2
     const pinIdx = centerPin + cumPos * 0.5
-    const x = rowOffsetX + pinIdx * PIN_GAP + (Math.random() - 0.5) * 8
+    const x = rowOffsetX + pinIdx * PIN_GAP + (Math.random() - 0.5) * 6
     const y = (row + 2) * PIN_GAP + PIN_R + BALL_R + 2
     pts.push({ x, y })
   }
@@ -90,7 +89,6 @@ function buildPath(slot: number): { x: number; y: number }[] {
   const slotWidth = WIDTH / COLS
   const bottomY = (ROWS + 2.5) * PIN_GAP
   pts.push({ x: slot * slotWidth + slotWidth / 2, y: bottomY })
-
   return pts
 }
 
@@ -98,7 +96,7 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
   const [bet, setBet] = useState(BET_OPTIONS[0])
   const [oddsSet, setOddsSet] = useState(ODDS_SETS[1])
   const [lastWin, setLastWin] = useState<{ amount: number; multiplier: number } | null>(null)
-  const [, setAnimBalls] = useState<AnimBall[]>([])
+  const [, setTick] = useState(0)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const ballIdRef = useRef(0)
   const animRef = useRef<number>(0)
@@ -121,39 +119,35 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
       done: false,
     }
     animBallsRef.current = [...animBallsRef.current, ball]
-    setAnimBalls([...animBallsRef.current])
+    setTick(t => t + 1)
   }, [credits, bet, onCreditsChange])
 
   useEffect(() => {
-    const BALL_SPEED = 120
+    const BALL_SPEED = 100
 
     const tick = () => {
       const now = performance.now()
       let anyActive = false
-      let changed = false
 
       for (const ball of animBallsRef.current) {
         if (ball.done) continue
         const elapsed = now - ball.startTime
         const totalDuration = ball.path.length * BALL_SPEED
-        if (elapsed >= totalDuration && !ball.done) {
+        if (elapsed >= totalDuration) {
           ball.done = true
-          changed = true
           const mult = oddsRef.current.mults[ball.slot]
           const winAmount = ball.bet * mult
           onCreditsChange(winAmount)
           setLastWin({ amount: winAmount, multiplier: mult })
-        } else if (!ball.done) {
+        } else {
           anyActive = true
         }
       }
 
-      if (animBallsRef.current.filter(b => b.done).length > 15) {
+      if (animBallsRef.current.filter(b => b.done).length > 20) {
         animBallsRef.current = animBallsRef.current.slice(-10)
-        changed = true
       }
 
-      if (changed) setAnimBalls([...animBallsRef.current])
       if (anyActive) animRef.current = requestAnimationFrame(tick)
     }
 
@@ -178,6 +172,7 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
+    const BALL_SPEED = 100
 
     const render = () => {
       ctx.clearRect(0, 0, WIDTH, HEIGHT)
@@ -197,20 +192,20 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
       for (let i = 0; i < COLS; i++) {
         const sc = slotColor(mults[i])
         ctx.fillStyle = sc
-        ctx.globalAlpha = 0.25
+        ctx.globalAlpha = 0.2
         ctx.fillRect(i * slotWidth, bottomY, slotWidth, PIN_GAP * 1.5)
         ctx.globalAlpha = 1
         ctx.fillStyle = sc
-        ctx.font = 'bold 10px system-ui'
+        ctx.font = 'bold 9px system-ui'
         ctx.textAlign = 'center'
-        ctx.fillText(`${mults[i]}x`, i * slotWidth + slotWidth / 2, bottomY + PIN_GAP)
+        const label = mults[i] >= 100 ? `${mults[i]}` : `${mults[i]}x`
+        ctx.fillText(label, i * slotWidth + slotWidth / 2, bottomY + PIN_GAP * 0.8)
       }
 
-      const BALL_SPEED = 120
       for (const ball of animBallsRef.current) {
         const elapsed = now - ball.startTime
         const totalDuration = ball.path.length * BALL_SPEED
-        if (ball.done && elapsed > totalDuration + 800) continue
+        if (ball.done && elapsed > totalDuration + 600) continue
 
         const t = Math.min(elapsed / totalDuration, 1)
         const pathProgress = t * (ball.path.length - 1)
@@ -221,7 +216,7 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
         const x = p0.x + (p1.x - p0.x) * frac
         const y = p0.y + (p1.y - p0.y) * frac
 
-        const alpha = ball.done ? Math.max(0, 1 - (elapsed - totalDuration) / 800) : 1
+        const alpha = ball.done ? Math.max(0, 1 - (elapsed - totalDuration) / 600) : 1
         ctx.globalAlpha = alpha
         ctx.beginPath()
         ctx.arc(x, y, BALL_R, 0, Math.PI * 2)
@@ -260,13 +255,13 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
         ))}
       </div>
 
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
+      <div className="flex items-center gap-1.5 mb-3 flex-wrap">
         <span className="text-xs text-text-muted">Risk:</span>
         {ODDS_SETS.map(o => (
           <button
             key={o.id}
             onClick={() => setOddsSet(o)}
-            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer border ${
+            className={`px-2 py-1 rounded-full text-[11px] font-medium transition-colors cursor-pointer border ${
               oddsSet.id === o.id ? 'text-white border-transparent' : 'bg-bg text-text-muted border-border hover:text-dark'
             }`}
             style={oddsSet.id === o.id ? { backgroundColor: o.color } : undefined}
@@ -277,10 +272,13 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
       </div>
 
       <div className="flex items-center justify-between mb-3">
-        <span className="text-sm text-text-muted">Balance: <span className="font-bold text-dark">{credits.toFixed(2)}</span></span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-text-muted">Balance: <span className="font-bold text-dark">{credits.toFixed(2)}</span></span>
+          <span className="text-[10px] text-text-muted">House edge {oddsSet.edge}</span>
+        </div>
         {lastWin && (
-          <span className={`text-sm font-bold ${lastWin.multiplier >= 3 ? 'text-yes' : lastWin.multiplier >= 1 ? 'text-dark' : 'text-no'}`}>
-            {lastWin.multiplier}x → {lastWin.amount > 0 ? '+' : ''}{lastWin.amount.toFixed(2)}
+          <span className={`text-sm font-bold ${lastWin.multiplier >= 10 ? 'text-yes' : lastWin.multiplier >= 1 ? 'text-dark' : 'text-no'}`}>
+            {lastWin.multiplier >= 100 ? `🎉 ${lastWin.multiplier}x!` : `${lastWin.multiplier}x`} → {lastWin.amount > 0 ? '+' : ''}{lastWin.amount.toFixed(2)}
           </span>
         )}
       </div>
@@ -295,7 +293,7 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
           style={{ maxWidth: WIDTH }}
         />
       </div>
-      <p className="text-[10px] text-text-muted text-center mt-2">Click the board to drop a coin</p>
+      <p className="text-[10px] text-text-muted text-center mt-2">Click the board to drop a coin · Edge slots: 1 in 4096 chance</p>
     </div>
   )
 }
