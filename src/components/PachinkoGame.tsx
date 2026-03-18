@@ -12,22 +12,18 @@ const ROWS = 12
 const COLS = ROWS + 3
 const PIN_GAP = 36
 const PIN_R = 4
-const BALL_R = 8
+const BALL_R = 7
 const WIDTH = (COLS + 1) * PIN_GAP
 const HEIGHT = (ROWS + 4) * PIN_GAP
 
-const ODDS_SETS: { name: string; color: string; mults: number[] }[] = [
-  { name: '🟢 Mild', color: '#22c55e', mults: [8, 4, 2, 1.5, 1, 0.5, 0.3, 0.2, 0.3, 0.5, 1, 1.5, 2, 4, 8] },
-  { name: '🔵 Standard', color: '#3b82f6', mults: [15, 5, 3, 1.5, 1, 0.5, 0.3, 0.1, 0.3, 0.5, 1, 1.5, 3, 5, 15] },
-  { name: '🟠 Spicy', color: '#f97316', mults: [25, 8, 3, 1, 0.5, 0.3, 0.2, 0.1, 0.2, 0.3, 0.5, 1, 3, 8, 25] },
-  { name: '🔴 Brutal', color: '#ef4444', mults: [50, 10, 3, 0.5, 0.3, 0.2, 0.1, 0, 0.1, 0.2, 0.3, 0.5, 3, 10, 50] },
-  { name: '💀 Degen', color: '#a855f7', mults: [100, 15, 2, 0.3, 0.1, 0, 0, 0, 0, 0, 0.1, 0.3, 2, 15, 100] },
-  { name: '🧊 Tight', color: '#64748b', mults: [5, 2, 1, 0.5, 0.3, 0.2, 0.1, 0.1, 0.1, 0.2, 0.3, 0.5, 1, 2, 5] },
+const ODDS_SETS: { id: string; name: string; color: string; mults: number[] }[] = [
+  { id: 'mild',     name: '🟢 Mild',     color: '#22c55e', mults: [8, 4, 2, 1.5, 1, 0.5, 0.3, 0.2, 0.3, 0.5, 1, 1.5, 2, 4, 8] },
+  { id: 'standard', name: '🔵 Standard', color: '#3b82f6', mults: [15, 5, 3, 1.5, 1, 0.5, 0.3, 0.1, 0.3, 0.5, 1, 1.5, 3, 5, 15] },
+  { id: 'spicy',    name: '🟠 Spicy',    color: '#f97316', mults: [25, 8, 3, 1, 0.5, 0.3, 0.2, 0.1, 0.2, 0.3, 0.5, 1, 3, 8, 25] },
+  { id: 'brutal',   name: '🔴 Brutal',   color: '#ef4444', mults: [50, 10, 3, 0.5, 0.3, 0.2, 0.1, 0, 0.1, 0.2, 0.3, 0.5, 3, 10, 50] },
+  { id: 'degen',    name: '💀 Degen',    color: '#a855f7', mults: [100, 15, 2, 0.3, 0.1, 0, 0, 0, 0, 0, 0.1, 0.3, 2, 15, 100] },
+  { id: 'tight',    name: '🧊 Tight',    color: '#64748b', mults: [5, 2, 1, 0.5, 0.3, 0.2, 0.1, 0.1, 0.1, 0.2, 0.3, 0.5, 1, 2, 5] },
 ]
-
-function pickOddsSet() {
-  return ODDS_SETS[Math.floor(Math.random() * ODDS_SETS.length)]
-}
 
 function slotColor(m: number): string {
   if (m >= 25) return '#ef4444'
@@ -38,41 +34,132 @@ function slotColor(m: number): string {
   return '#374151'
 }
 
-interface Ball {
+function galtonSlot(): number {
+  let pos = 0
+  for (let i = 0; i < ROWS; i++) {
+    pos += Math.random() < 0.5 ? -1 : 1
+  }
+  const slot = Math.round((pos + ROWS) / 2)
+  return Math.max(0, Math.min(COLS - 1, slot))
+}
+
+interface AnimBall {
   id: number
-  x: number
-  y: number
-  vx: number
-  vy: number
-  bet: number
-  landed: boolean
+  path: { x: number; y: number }[]
   slot: number
+  bet: number
+  startTime: number
+  done: boolean
+}
+
+function buildPath(slot: number): { x: number; y: number }[] {
+  const pts: { x: number; y: number }[] = []
+  const startX = WIDTH / 2
+  const startY = PIN_GAP * 0.5
+  pts.push({ x: startX, y: startY })
+
+  let pos = 0
+  const steps: number[] = []
+  let target = slot - Math.floor(COLS / 2)
+
+  for (let i = 0; i < ROWS; i++) {
+    const remaining = ROWS - i
+    const needed = target - pos
+    let goRight: boolean
+    if (needed > 0 && needed >= remaining) goRight = true
+    else if (needed < 0 && -needed >= remaining) goRight = false
+    else goRight = Math.random() < 0.5
+    const step = goRight ? 1 : -1
+    pos += step
+    steps.push(step)
+    target = slot - Math.floor(COLS / 2)
+  }
+
+  let cumPos = 0
+  for (let row = 0; row < ROWS; row++) {
+    cumPos += steps[row]
+    const count = row + 3
+    const rowOffsetX = (WIDTH - (count - 1) * PIN_GAP) / 2
+    const centerPin = (count - 1) / 2
+    const pinIdx = centerPin + cumPos * 0.5
+    const x = rowOffsetX + pinIdx * PIN_GAP + (Math.random() - 0.5) * 8
+    const y = (row + 2) * PIN_GAP + PIN_R + BALL_R + 2
+    pts.push({ x, y })
+  }
+
+  const slotWidth = WIDTH / COLS
+  const bottomY = (ROWS + 2.5) * PIN_GAP
+  pts.push({ x: slot * slotWidth + slotWidth / 2, y: bottomY })
+
+  return pts
 }
 
 export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameProps) {
   const [bet, setBet] = useState(BET_OPTIONS[0])
-  const [balls, setBalls] = useState<Ball[]>([])
+  const [oddsSet, setOddsSet] = useState(ODDS_SETS[1])
   const [lastWin, setLastWin] = useState<{ amount: number; multiplier: number } | null>(null)
-  const [oddsSet, setOddsSet] = useState(() => pickOddsSet())
-  const [oddsNotice, setOddsNotice] = useState('')
-  const [dropCount, setDropCount] = useState(0)
+  const [, setAnimBalls] = useState<AnimBall[]>([])
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const ballIdRef = useRef(0)
   const animRef = useRef<number>(0)
-  const ballsRef = useRef<Ball[]>([])
+  const animBallsRef = useRef<AnimBall[]>([])
   const oddsRef = useRef(oddsSet)
-  const dropCountRef = useRef(0)
 
   useEffect(() => { oddsRef.current = oddsSet }, [oddsSet])
 
-  const rotateOdds = useCallback(() => {
-    let next = pickOddsSet()
-    while (next.name === oddsRef.current.name && ODDS_SETS.length > 1) next = pickOddsSet()
-    oddsRef.current = next
-    setOddsSet(next)
-    setOddsNotice(`Odds shifted → ${next.name}`)
-    setTimeout(() => setOddsNotice(''), 3000)
-  }, [])
+  const drop = useCallback(() => {
+    if (credits < bet) return
+    onCreditsChange(-bet)
+    const slot = galtonSlot()
+    const path = buildPath(slot)
+    const ball: AnimBall = {
+      id: ++ballIdRef.current,
+      path,
+      slot,
+      bet,
+      startTime: performance.now(),
+      done: false,
+    }
+    animBallsRef.current = [...animBallsRef.current, ball]
+    setAnimBalls([...animBallsRef.current])
+  }, [credits, bet, onCreditsChange])
+
+  useEffect(() => {
+    const BALL_SPEED = 120
+
+    const tick = () => {
+      const now = performance.now()
+      let anyActive = false
+      let changed = false
+
+      for (const ball of animBallsRef.current) {
+        if (ball.done) continue
+        const elapsed = now - ball.startTime
+        const totalDuration = ball.path.length * BALL_SPEED
+        if (elapsed >= totalDuration && !ball.done) {
+          ball.done = true
+          changed = true
+          const mult = oddsRef.current.mults[ball.slot]
+          const winAmount = ball.bet * mult
+          onCreditsChange(winAmount)
+          setLastWin({ amount: winAmount, multiplier: mult })
+        } else if (!ball.done) {
+          anyActive = true
+        }
+      }
+
+      if (animBallsRef.current.filter(b => b.done).length > 15) {
+        animBallsRef.current = animBallsRef.current.slice(-10)
+        changed = true
+      }
+
+      if (changed) setAnimBalls([...animBallsRef.current])
+      if (anyActive) animRef.current = requestAnimationFrame(tick)
+    }
+
+    animRef.current = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(animRef.current)
+  }, [onCreditsChange])
 
   const getPins = useCallback(() => {
     const pins: { x: number; y: number }[] = []
@@ -86,143 +173,72 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
     return pins
   }, [])
 
-  const drop = useCallback(() => {
-    if (credits < bet) return
-    onCreditsChange(-bet)
-
-    dropCountRef.current += 1
-    setDropCount(dropCountRef.current)
-    if (dropCountRef.current % 10 === 0) rotateOdds()
-
-    const newBall: Ball = {
-      id: ++ballIdRef.current,
-      x: WIDTH / 2 + (Math.random() - 0.5) * 6,
-      y: PIN_GAP * 0.5,
-      vx: (Math.random() - 0.5) * 0.2,
-      vy: 0,
-      bet,
-      landed: false,
-      slot: -1,
-    }
-    ballsRef.current = [...ballsRef.current, newBall]
-    setBalls([...ballsRef.current])
-  }, [credits, bet, onCreditsChange, rotateOdds])
-
-  useEffect(() => {
-    const pins = getPins()
-    const gravity = 0.12
-    const friction = 0.97
-    const bounce = 0.4
-
-    const slotWidth = WIDTH / COLS
-    const bottomY = (ROWS + 2.5) * PIN_GAP
-
-    const tick = () => {
-      let changed = false
-      const current = ballsRef.current
-      const updated = current.map(ball => {
-        if (ball.landed) return ball
-        changed = true
-        let { x, y, vx, vy } = ball
-
-        vy += gravity
-        vx *= friction
-        x += vx
-        y += vy
-
-        for (const pin of pins) {
-          const dx = x - pin.x
-          const dy = y - pin.y
-          const dist = Math.sqrt(dx * dx + dy * dy)
-          const minDist = PIN_R + BALL_R
-          if (dist < minDist && dist > 0) {
-            const nx = dx / dist
-            const ny = dy / dist
-            x = pin.x + nx * minDist
-            y = pin.y + ny * minDist
-            const dot = vx * nx + vy * ny
-            vx -= 2 * dot * nx * bounce
-            vy -= 2 * dot * ny * bounce
-            vx += (Math.random() - 0.5) * 0.6
-          }
-        }
-
-        if (x < BALL_R) { x = BALL_R; vx = Math.abs(vx) * bounce }
-        if (x > WIDTH - BALL_R) { x = WIDTH - BALL_R; vx = -Math.abs(vx) * bounce }
-
-        if (y >= bottomY) {
-          const slot = Math.min(COLS - 1, Math.max(0, Math.floor(x / slotWidth)))
-          const mult = oddsRef.current.mults[slot]
-          const winAmount = ball.bet * mult
-          onCreditsChange(winAmount)
-          setLastWin({ amount: winAmount, multiplier: mult })
-          return { ...ball, x, y: bottomY, vx: 0, vy: 0, landed: true, slot }
-        }
-
-        return { ...ball, x, y, vx, vy }
-      })
-
-      ballsRef.current = updated
-      if (changed) setBalls([...updated])
-
-      if (updated.some(b => !b.landed)) {
-        animRef.current = requestAnimationFrame(tick)
-      }
-
-      const landed = updated.filter(b => b.landed)
-      if (landed.length > 10) {
-        ballsRef.current = ballsRef.current.filter(b => !b.landed || updated.indexOf(b) >= landed.length - 5)
-      }
-    }
-
-    animRef.current = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(animRef.current)
-  }, [getPins, onCreditsChange])
-
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
-    ctx.clearRect(0, 0, WIDTH, HEIGHT)
+    const render = () => {
+      ctx.clearRect(0, 0, WIDTH, HEIGHT)
+      const now = performance.now()
 
-    const pins = getPins()
-    for (const pin of pins) {
-      ctx.beginPath()
-      ctx.arc(pin.x, pin.y, PIN_R, 0, Math.PI * 2)
-      ctx.fillStyle = '#94a3b8'
-      ctx.fill()
+      const pins = getPins()
+      for (const pin of pins) {
+        ctx.beginPath()
+        ctx.arc(pin.x, pin.y, PIN_R, 0, Math.PI * 2)
+        ctx.fillStyle = '#94a3b8'
+        ctx.fill()
+      }
+
+      const mults = oddsSet.mults
+      const slotWidth = WIDTH / COLS
+      const bottomY = (ROWS + 2.5) * PIN_GAP
+      for (let i = 0; i < COLS; i++) {
+        const sc = slotColor(mults[i])
+        ctx.fillStyle = sc
+        ctx.globalAlpha = 0.25
+        ctx.fillRect(i * slotWidth, bottomY, slotWidth, PIN_GAP * 1.5)
+        ctx.globalAlpha = 1
+        ctx.fillStyle = sc
+        ctx.font = 'bold 10px system-ui'
+        ctx.textAlign = 'center'
+        ctx.fillText(`${mults[i]}x`, i * slotWidth + slotWidth / 2, bottomY + PIN_GAP)
+      }
+
+      const BALL_SPEED = 120
+      for (const ball of animBallsRef.current) {
+        const elapsed = now - ball.startTime
+        const totalDuration = ball.path.length * BALL_SPEED
+        if (ball.done && elapsed > totalDuration + 800) continue
+
+        const t = Math.min(elapsed / totalDuration, 1)
+        const pathProgress = t * (ball.path.length - 1)
+        const idx = Math.floor(pathProgress)
+        const frac = pathProgress - idx
+        const p0 = ball.path[Math.min(idx, ball.path.length - 1)]
+        const p1 = ball.path[Math.min(idx + 1, ball.path.length - 1)]
+        const x = p0.x + (p1.x - p0.x) * frac
+        const y = p0.y + (p1.y - p0.y) * frac
+
+        const alpha = ball.done ? Math.max(0, 1 - (elapsed - totalDuration) / 800) : 1
+        ctx.globalAlpha = alpha
+        ctx.beginPath()
+        ctx.arc(x, y, BALL_R, 0, Math.PI * 2)
+        ctx.fillStyle = '#e54545'
+        ctx.fill()
+        ctx.strokeStyle = '#b91c1c'
+        ctx.lineWidth = 1.5
+        ctx.stroke()
+        ctx.globalAlpha = 1
+      }
+
+      requestAnimationFrame(render)
     }
 
-    const mults = oddsSet.mults
-    const slotWidth = WIDTH / COLS
-    const bottomY = (ROWS + 2.5) * PIN_GAP
-    for (let i = 0; i < COLS; i++) {
-      const sc = slotColor(mults[i])
-      ctx.fillStyle = sc
-      ctx.globalAlpha = 0.25
-      ctx.fillRect(i * slotWidth, bottomY, slotWidth, PIN_GAP * 1.5)
-      ctx.globalAlpha = 1
-      ctx.fillStyle = sc
-      ctx.font = 'bold 10px system-ui'
-      ctx.textAlign = 'center'
-      ctx.fillText(`${mults[i]}x`, i * slotWidth + slotWidth / 2, bottomY + PIN_GAP)
-    }
-
-    for (const ball of balls) {
-      if (ball.landed) continue
-      ctx.beginPath()
-      ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2)
-      ctx.fillStyle = '#e54545'
-      ctx.fill()
-      ctx.strokeStyle = '#b91c1c'
-      ctx.lineWidth = 1.5
-      ctx.stroke()
-    }
-  }, [balls, getPins, oddsSet])
-
-  const coinsUntilShift = 10 - (dropCount % 10)
+    const frame = requestAnimationFrame(render)
+    return () => cancelAnimationFrame(frame)
+  }, [getPins, oddsSet])
 
   return (
     <div className="p-4 max-w-xl mx-auto">
@@ -244,7 +260,23 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
         ))}
       </div>
 
-      <div className="flex items-center justify-between mb-2">
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <span className="text-xs text-text-muted">Risk:</span>
+        {ODDS_SETS.map(o => (
+          <button
+            key={o.id}
+            onClick={() => setOddsSet(o)}
+            className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer border ${
+              oddsSet.id === o.id ? 'text-white border-transparent' : 'bg-bg text-text-muted border-border hover:text-dark'
+            }`}
+            style={oddsSet.id === o.id ? { backgroundColor: o.color } : undefined}
+          >
+            {o.name}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex items-center justify-between mb-3">
         <span className="text-sm text-text-muted">Balance: <span className="font-bold text-dark">{credits.toFixed(2)}</span></span>
         {lastWin && (
           <span className={`text-sm font-bold ${lastWin.multiplier >= 3 ? 'text-yes' : lastWin.multiplier >= 1 ? 'text-dark' : 'text-no'}`}>
@@ -252,17 +284,6 @@ export function PachinkoGame({ credits, onCreditsChange, onBack }: PachinkoGameP
           </span>
         )}
       </div>
-
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-xs font-medium" style={{ color: oddsSet.color }}>{oddsSet.name}</span>
-        <span className="text-[10px] text-text-muted">Shifts in {coinsUntilShift} coin{coinsUntilShift !== 1 ? 's' : ''}</span>
-      </div>
-
-      {oddsNotice && (
-        <div className="text-center text-sm font-bold mb-2 animate-pulse" style={{ color: oddsSet.color }}>
-          {oddsNotice}
-        </div>
-      )}
 
       <div className="bg-surface border border-border rounded-xl p-2 overflow-hidden">
         <canvas
