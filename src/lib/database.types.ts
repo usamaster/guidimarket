@@ -31,6 +31,16 @@ export interface Holding {
   avg_buy_price: number
 }
 
+export interface ShortPosition {
+  id: string
+  user_id: string
+  stock_id: string
+  quantity: number
+  entry_price: number
+  collateral: number
+  created_at: string
+}
+
 export interface Message {
   id: string
   user_id: string
@@ -94,7 +104,7 @@ export interface Trade {
   stock_id: string
   user_id: string | null
   username: string
-  type: 'buy' | 'sell'
+  type: 'buy' | 'sell' | 'short' | 'cover'
   quantity: number
   price: number
   total: number

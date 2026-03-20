@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase } from './lib/supabase'
 import { ADMIN_USER_ID } from './lib/constants'
-import type { Stock, PricePoint, Portfolio, Holding, Trade, NewsItem, MarketEvent, Loan, Bankruptcy } from './lib/database.types'
+import type { Stock, PricePoint, Portfolio, Holding, Trade, NewsItem, MarketEvent, Loan, Bankruptcy, ShortPosition } from './lib/database.types'
 import type { Session } from '@supabase/supabase-js'
 import { Header } from './components/Header'
 import { computePortfolioValue } from './lib/portfolio'
@@ -35,20 +35,23 @@ async function loadAllData(userId: string): Promise<{
   trades: Trade[]
   portfolio: Portfolio | null
   holdings: Holding[]
+  shortPositions: ShortPosition[]
   priceHistory: Record<string, PricePoint[]>
-  leaderboard: { username: string; totalValue: number; credits: number; holdings: Holding[] }[]
+  leaderboard: { username: string; totalValue: number; credits: number; holdings: Holding[]; shortPositions: ShortPosition[] }[]
 }> {
-  const [stocksRes, tradesRes, portfolioRes, holdingsRes] = await Promise.all([
+  const [stocksRes, tradesRes, portfolioRes, holdingsRes, shortsRes] = await Promise.all([
     supabase.from('stocks').select('*').order('ticker'),
     supabase.from('trades').select('*').order('created_at', { ascending: false }).limit(200),
     supabase.rpc('init_portfolio', { p_user_id: userId }),
     supabase.from('holdings').select('*').eq('user_id', userId),
+    supabase.from('short_positions').select('*').eq('user_id', userId),
   ])
 
   const stocks = (stocksRes.data || []) as Stock[]
   const trades = (tradesRes.data || []) as Trade[]
   const portfolio = portfolioRes.data ? (portfolioRes.data as unknown as Portfolio) : null
   const holdings = (holdingsRes.data || []) as Holding[]
+  const shortPositions = (shortsRes.data || []) as ShortPosition[]
 
   const histMap: Record<string, PricePoint[]> = {}
   const histRes = await supabase.from('price_history').select('*').order('created_at', { ascending: true })
@@ -59,19 +62,23 @@ async function loadAllData(userId: string): Promise<{
 
   const allPortfolios = await supabase.from('portfolios').select('*')
   const allHoldings = await supabase.from('holdings').select('*')
-  const leaderboard: { username: string; totalValue: number; credits: number; holdings: Holding[] }[] = []
+  const allShortsRes = await supabase.from('short_positions').select('*')
+  const allShorts = (allShortsRes.data || []) as ShortPosition[]
+  const leaderboard: { username: string; totalValue: number; credits: number; holdings: Holding[]; shortPositions: ShortPosition[] }[] = []
   for (const p of (allPortfolios.data || []) as Portfolio[]) {
     const userHoldings = ((allHoldings.data || []) as Holding[]).filter(h => h.user_id === p.user_id)
-    const holdingsValue = computePortfolioValue(userHoldings, stocks)
+    const userShorts = allShorts.filter(s => s.user_id === p.user_id)
+    const holdingsValue = computePortfolioValue(userHoldings, stocks, userShorts)
     leaderboard.push({
       username: p.display_name || p.user_id.slice(0, 8),
       totalValue: Number(p.credits) + holdingsValue,
       credits: Number(p.credits),
       holdings: userHoldings,
+      shortPositions: userShorts,
     })
   }
 
-  return { stocks, trades, portfolio, holdings, priceHistory: histMap, leaderboard }
+  return { stocks, trades, portfolio, holdings, shortPositions, priceHistory: histMap, leaderboard }
 }
 
 function App() {
@@ -82,8 +89,9 @@ function App() {
   const [priceHistory, setPriceHistory] = useState<Record<string, PricePoint[]>>({})
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null)
   const [holdings, setHoldings] = useState<Holding[]>([])
+  const [shortPositions, setShortPositions] = useState<ShortPosition[]>([])
   const [trades, setTrades] = useState<Trade[]>([])
-  const [leaderboard, setLeaderboard] = useState<{ username: string; totalValue: number; credits: number; holdings: Holding[] }[]>([])
+  const [leaderboard, setLeaderboard] = useState<{ username: string; totalValue: number; credits: number; holdings: Holding[]; shortPositions: ShortPosition[] }[]>([])
 
   const [selectedStock, setSelectedStock] = useState<string | null>(null)
   const [tab, setTab] = useState<Tab>('all')
@@ -148,6 +156,7 @@ function App() {
       setTrades(result.trades)
       setPortfolio(result.portfolio)
       setHoldings(result.holdings)
+      setShortPositions(result.shortPositions)
       setPriceHistory(result.priceHistory)
       setLeaderboard(result.leaderboard)
       setLoading(false)
@@ -275,6 +284,14 @@ function App() {
       })
       .subscribe()
 
+    const uid = session.user.id
+    const shortsChannel = supabase
+      .channel('shorts-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'short_positions', filter: `user_id=eq.${uid}` }, () => {
+        setRefreshKey(k => k + 1)
+      })
+      .subscribe()
+
     return () => {
       supabase.removeChannel(stockChannel)
       supabase.removeChannel(tradeChannel)
@@ -282,6 +299,7 @@ function App() {
       supabase.removeChannel(eventsChannel)
       supabase.removeChannel(loansChannel)
       supabase.removeChannel(bankruptcyChannel)
+      supabase.removeChannel(shortsChannel)
     }
   }, [session])
 
@@ -360,7 +378,7 @@ function App() {
   const username = portfolio?.display_name || session.user.email?.split('@')[0] || 'User'
   const isAdmin = session.user.id === ADMIN_USER_ID
   const credits = portfolio ? Number(portfolio.credits) : 1000
-  const portfolioValue = computePortfolioValue(holdings, stocks)
+  const portfolioValue = computePortfolioValue(holdings, stocks, shortPositions)
   const hasLateLoan = loans.some(l => l.status === 'funded' && l.borrower_id === session.user.id && l.funded_at && (clockNow - new Date(l.funded_at).getTime()) > 2 * 60 * 60 * 1000)
   const isBankrupt = credits <= 0 && hasLateLoan
   const myPendingBankruptcy = bankruptcies.find(b => b.user_id === session.user.id && b.status === 'pending')
@@ -383,6 +401,7 @@ function App() {
 
   const selected = stocks.find(s => s.id === selectedStock) || null
   const selectedHolding = holdings.find(h => h.stock_id === selectedStock)?.quantity || 0
+  const selectedShort = shortPositions.find(s => s.stock_id === selectedStock) || null
 
   return (
     <div className="h-screen flex flex-col bg-bg overflow-hidden">
@@ -427,6 +446,7 @@ function App() {
           <aside className="w-56 shrink-0 hidden xl:flex flex-col p-4 gap-3 overflow-y-auto border-r border-border">
             <PortfolioSidebar
               holdings={holdings}
+              shortPositions={shortPositions}
               stocks={stocks}
               onStockClick={setSelectedStock}
             />
@@ -501,6 +521,7 @@ function App() {
           trades={trades}
           portfolio={portfolio}
           userHolding={selectedHolding}
+          userShort={selectedShort}
           onClose={() => setSelectedStock(null)}
           onTraded={handleTraded}
         />

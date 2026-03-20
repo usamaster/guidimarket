@@ -57,6 +57,21 @@
 
 Unique constraint on `(user_id, stock_id)`.
 
+### `short_positions`
+| Column | Type | Notes |
+|--------|------|-------|
+| id | uuid PK | |
+| user_id | uuid | FK → auth.users |
+| stock_id | uuid | FK → stocks |
+| quantity | integer | Short size |
+| entry_price | numeric | Exec price at open |
+| collateral | numeric | Typically 2× notional |
+| created_at | timestamptz | |
+
+Unique constraint on `(user_id, stock_id)`. One open short per stock per user.
+
+Apply schema and RPC updates by running `supabase/short_selling.sql` in the SQL Editor. Afterward, enable Realtime if needed: `ALTER PUBLICATION supabase_realtime ADD TABLE short_positions;`
+
 ### `trades`
 | Column | Type | Notes |
 |--------|------|-------|
@@ -64,7 +79,7 @@ Unique constraint on `(user_id, stock_id)`.
 | stock_id | uuid | |
 | user_id | uuid nullable | null for bot trades |
 | username | text | Display name of trader |
-| type | text | `buy` or `sell` |
+| type | text | `buy`, `sell`, `short`, or `cover` |
 | quantity | integer | |
 | price | numeric | Price at time of trade |
 | total | numeric | price × quantity |
@@ -86,7 +101,7 @@ Unique constraint on `(user_id, stock_id)`.
 Called on login. Creates portfolio with 1000 credits if not exists. Sets `display_name` from email prefix. Idempotent.
 
 ### `execute_trade(p_user_id uuid, p_stock_id uuid, p_type text, p_quantity int) → trades`
-Atomic buy/sell. Validates credits/shares, updates holdings (weighted avg price), moves price by `0.5% × quantity`, records price history and trade. Returns the trade row.
+Atomic buy/sell/short/cover. Buy/sell: updates holdings, exec-first price impact. **short**: locks 2× collateral, opens `short_positions`, moves price down. **cover**: closes short, returns `collateral + P/L` (floored at 0), moves price up. Liquidates shorts when price ≥ 1.5× entry after buy/cover. Same cooldown and daily volume limits as spot trades.
 
 ### `admin_adjust_price(p_stock_id uuid, p_percentage numeric) → stocks`
 Admin only (checks `auth.uid()` against hardcoded admin UUID). Adjusts price by given percentage. Used by admin panel buttons (±5%, ±10%, ±20%, ±50%, ±100%).
@@ -133,15 +148,16 @@ Supabase Realtime is enabled on these tables (via `supabase_realtime` publicatio
 - `trades` — new trades appear in ticker/feed
 - `messages` — chat messages broadcast instantly
 - `news_items` — when a news item is published (UPDATE with published=true), all clients get a snackbar + sound notification
+- `short_positions` — add to publication after migration (see `short_positions` section above)
 
-Frontend subscribes in `App.tsx` (stocks + trades channels) and `ChatBox.tsx` (messages channel).
+Frontend subscribes in `App.tsx` (stocks, trades, short_positions, etc.) and `ChatBox.tsx` (messages channel).
 
 ## RLS Policies
 
 | Table | Policy | Rule |
 |-------|--------|------|
-| stocks, holdings, portfolios, price_history, trades | `anon_read_*` | SELECT for everyone |
-| stocks, holdings, portfolios, price_history, trades | `auth_all_*` | ALL for authenticated users |
+| stocks, holdings, portfolios, price_history, trades, short_positions | `anon_read_*` | SELECT for everyone |
+| stocks, holdings, portfolios, price_history, trades, short_positions | `auth_all_*` | ALL for authenticated users |
 | messages | `Anyone can read messages` | SELECT for everyone |
 | messages | `Auth users can insert` | INSERT where `auth.uid() = user_id` |
 
@@ -170,7 +186,7 @@ The stocks were seeded via `scripts/migrate.mjs` (deleted after use). They inclu
 | `src/components/Header.tsx` | Nav bar with Market/Trade Log tabs, admin toggle |
 | `src/components/StockCard.tsx` | Stock tile with sparkline |
 | `src/components/StockDetail.tsx` | Modal: chart (lightweight-charts), trade panel, trade feed |
-| `src/components/Portfolio.tsx` | Sidebar: user's holdings |
+| `src/components/Portfolio.tsx` | Sidebar: holdings and short positions |
 | `src/components/Leaderboard.tsx` | Sidebar: ranked users, expandable portfolios |
 | `src/components/AdminPanel.tsx` | Price adjustment buttons, generate noise |
 | `src/components/TradeLog.tsx` | Filterable/sortable trade history table |

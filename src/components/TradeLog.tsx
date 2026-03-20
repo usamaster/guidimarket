@@ -12,7 +12,7 @@ type SortDir = 'asc' | 'desc'
 export function TradeLog({ trades, stocks }: TradeLogProps) {
   const [userFilter, setUserFilter] = useState('')
   const [stockFilter, setStockFilter] = useState('')
-  const [typeFilter, setTypeFilter] = useState<'' | 'buy' | 'sell'>('')
+  const [typeFilter, setTypeFilter] = useState<'' | 'buy' | 'sell' | 'short' | 'cover'>('')
   const [hideFake, setHideFake] = useState(false)
   const [sortKey, setSortKey] = useState<SortKey>('time')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
@@ -94,12 +94,14 @@ export function TradeLog({ trades, stocks }: TradeLogProps) {
 
         <select
           value={typeFilter}
-          onChange={e => setTypeFilter(e.target.value as '' | 'buy' | 'sell')}
+          onChange={e => setTypeFilter(e.target.value as '' | 'buy' | 'sell' | 'short' | 'cover')}
           className="border border-border rounded-lg px-3 py-2 text-sm bg-surface text-dark focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
         >
-          <option value="">Buy & Sell</option>
-          <option value="buy">Buy only</option>
-          <option value="sell">Sell only</option>
+          <option value="">All types</option>
+          <option value="buy">Buy</option>
+          <option value="sell">Sell</option>
+          <option value="short">Short</option>
+          <option value="cover">Cover</option>
         </select>
 
         <label className="flex items-center gap-2 text-sm text-dark cursor-pointer select-none">
@@ -156,7 +158,7 @@ export function TradeLog({ trades, stocks }: TradeLogProps) {
                   </td>
                   <td className="px-4 py-2.5">
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                      t.type === 'buy' ? 'bg-yes-light text-yes' : 'bg-no-light text-no'
+                      t.type === 'buy' || t.type === 'cover' ? 'bg-yes-light text-yes' : t.type === 'short' ? 'bg-primary/15 text-primary' : 'bg-no-light text-no'
                     }`}>
                       {t.type.toUpperCase()}
                     </span>

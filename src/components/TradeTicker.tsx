@@ -9,7 +9,7 @@ interface TradeTickerProps {
 interface Toast {
   id: string
   text: string
-  type: 'buy' | 'sell'
+  type: Trade['type']
   ts: number
 }
 
@@ -30,9 +30,10 @@ function ingestTrades(trades: Trade[], stocks: Stock[]) {
     if (age > 30_000) { seen.add(t.id); continue }
     seen.add(t.id)
     const stock = stocks.find(s => s.id === t.stock_id)
+    const verb = t.type === 'buy' ? 'bought' : t.type === 'sell' ? 'sold' : t.type === 'short' ? 'shorted' : 'covered'
     fresh.push({
       id: t.id,
-      text: `${t.username} ${t.type === 'buy' ? 'bought' : 'sold'} ${t.quantity}x ${stock?.emoji || ''} ${stock?.ticker || '???'} @ ${Number(t.price).toFixed(2)}`,
+      text: `${t.username} ${verb} ${t.quantity}x ${stock?.emoji || ''} ${stock?.ticker || '???'} @ ${Number(t.price).toFixed(2)}`,
       type: t.type,
       ts: now,
     })
@@ -70,9 +71,11 @@ export function TradeTicker({ trades, stocks }: TradeTickerProps) {
         <div
           key={toast.id}
           className={`pointer-events-auto px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium animate-[slideIn_0.3s_ease-out] ${
-            toast.type === 'buy'
+            toast.type === 'buy' || toast.type === 'cover'
               ? 'bg-yes text-white'
-              : 'bg-no text-white'
+              : toast.type === 'short'
+                ? 'bg-primary text-white'
+                : 'bg-no text-white'
           }`}
         >
           {toast.text}
