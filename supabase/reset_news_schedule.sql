@@ -1,11 +1,10 @@
-WITH ordered AS (
-  SELECT id, row_number() OVER (ORDER BY created_at ASC) AS rn
-  FROM news_items
-)
-UPDATE news_items n
+UPDATE news_items AS n
 SET
   published = false,
   impacts_already_applied = false,
-  published_at = now() + (ordered.rn * interval '10 minutes')
-FROM ordered
-WHERE n.id = ordered.id;
+  published_at = now() + (o.rn * interval '10 minutes')
+FROM (
+  SELECT id, row_number() OVER (ORDER BY created_at ASC) AS rn
+  FROM news_items
+) AS o
+WHERE n.id = o.id;

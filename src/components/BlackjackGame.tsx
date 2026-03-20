@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useRef } from 'react'
 
 interface BlackjackGameProps {
   credits: number
@@ -37,17 +37,37 @@ function cardValue(cards: Card[]): number {
   return total
 }
 
-function CardEl({ card, hidden }: { card: Card; hidden?: boolean }) {
+function delay(ms: number) {
+  return new Promise<void>(resolve => setTimeout(resolve, ms))
+}
+
+function CardEl({
+  card,
+  hidden,
+  delayMs,
+  flip,
+}: {
+  card: Card
+  hidden?: boolean
+  delayMs?: number
+  flip?: boolean
+}) {
   if (hidden) {
     return (
-      <div className="w-16 h-24 rounded-lg bg-primary/80 border-2 border-primary flex items-center justify-center text-white text-xl font-bold shadow-md">
+      <div
+        style={{ animationDelay: `${delayMs ?? 0}ms` }}
+        className="w-16 h-24 rounded-lg bg-primary/80 border-2 border-primary flex items-center justify-center text-white text-xl font-bold shadow-md bj-card-in"
+      >
         ?
       </div>
     )
   }
   const red = card.suit === '♥' || card.suit === '♦'
   return (
-    <div className={`w-16 h-24 rounded-lg bg-card border-2 border-border flex flex-col items-center justify-center shadow-md ${red ? 'text-red-500' : 'text-card-ink'}`}>
+    <div
+      style={{ animationDelay: `${delayMs ?? 0}ms` }}
+      className={`w-16 h-24 rounded-lg bg-card border-2 border-border flex flex-col items-center justify-center shadow-md bj-card-in ${flip ? 'bj-flip-in' : ''} ${red ? 'text-red-500' : 'text-card-ink'}`}
+    >
       <span className="text-lg font-bold leading-none">{card.rank}</span>
       <span className="text-xl leading-none">{card.suit}</span>
     </div>
@@ -60,9 +80,64 @@ export function BlackjackGame({ credits, onCreditsChange, onBack }: BlackjackGam
   const [bet, setBet] = useState(BET_OPTIONS[2])
   const [phase, setPhase] = useState<Phase>('bet')
   const [deck, setDeck] = useState<Card[]>([])
-  const [playerHand, setPlayerHand] = useState<Card[]>([])
+  const [playerHands, setPlayerHands] = useState<Card[][]>([])
+  const [activeHandIdx, setActiveHandIdx] = useState(0)
   const [dealerHand, setDealerHand] = useState<Card[]>([])
+  const [dealerReveal, setDealerReveal] = useState(false)
+  const [resolving, setResolving] = useState(false)
   const [result, setResult] = useState('')
+  const [handStakes, setHandStakes] = useState<number[]>([])
+  const dealingGen = useRef(0)
+
+  const finishDealer = useCallback(
+    async (pile: Card[], dh: Card[], hands: Card[][], stakes: number[]) => {
+      setResolving(true)
+      setDealerReveal(true)
+      await delay(420)
+      let curPile = [...pile]
+      let dealer = [...dh]
+      const allBust = hands.every(h => cardValue(h) > 21)
+      if (!allBust) {
+        while (cardValue(dealer) < 17) {
+          await delay(480)
+          const next = curPile.pop()
+          if (!next) break
+          dealer = [...dealer, next]
+          setDealerHand([...dealer])
+          setDeck([...curPile])
+        }
+      }
+      const dv = cardValue(dealer)
+      const msgs: string[] = []
+      let delta = 0
+      for (let i = 0; i < hands.length; i++) {
+        const stake = stakes[i] ?? bet
+        const pv = cardValue(hands[i])
+        const label = hands.length > 1 ? `Hand ${i + 1}: ` : ''
+        if (pv > 21) {
+          msgs.push(`${label}Bust`)
+          continue
+        }
+        if (dv > 21) {
+          delta += stake * 2
+          msgs.push(`${label}Win`)
+        } else if (pv > dv) {
+          delta += stake * 2
+          msgs.push(`${label}Win`)
+        } else if (pv === dv) {
+          delta += stake
+          msgs.push(`${label}Push`)
+        } else {
+          msgs.push(`${label}Lose`)
+        }
+      }
+      setResult(msgs.join(' · '))
+      onCreditsChange(delta)
+      setPhase('done')
+      setResolving(false)
+    },
+    [bet, onCreditsChange],
+  )
 
   const deal = useCallback(() => {
     if (credits < bet) return
@@ -70,18 +145,23 @@ export function BlackjackGame({ credits, onCreditsChange, onBack }: BlackjackGam
     const d = createDeck()
     const ph = [d.pop()!, d.pop()!]
     const dh = [d.pop()!, d.pop()!]
+    dealingGen.current += 1
     setDeck(d)
-    setPlayerHand(ph)
+    setPlayerHands([ph])
+    setHandStakes([bet])
+    setActiveHandIdx(0)
     setDealerHand(dh)
+    setDealerReveal(false)
     setResult('')
 
     if (cardValue(ph) === 21) {
       const dealerBJ = cardValue(dh) === 21
+      setDealerReveal(true)
       if (dealerBJ) {
         setResult('Push — both Blackjack')
         onCreditsChange(bet)
       } else {
-        setResult('Blackjack! 🎉')
+        setResult('Blackjack!')
         onCreditsChange(bet * 2.5)
       }
       setPhase('done')
@@ -90,83 +170,135 @@ export function BlackjackGame({ credits, onCreditsChange, onBack }: BlackjackGam
     setPhase('playing')
   }, [credits, bet, onCreditsChange])
 
-  const hit = useCallback(() => {
+  const hit = useCallback(async () => {
+    if (resolving) return
     const d = [...deck]
-    const hand = [...playerHand, d.pop()!]
+    const nh = playerHands.map((h, i) => (i === activeHandIdx ? [...h, d.pop()!] : h))
+    const hand = nh[activeHandIdx]
     setDeck(d)
-    setPlayerHand(hand)
-    if (cardValue(hand) > 21) {
-      setResult('Bust! 💥')
-      setPhase('done')
-    }
-  }, [deck, playerHand])
+    setPlayerHands(nh)
+    const v = cardValue(hand)
+    const multi = playerHands.length > 1
+    const idx = activeHandIdx
+    const stakes = handStakes.length > 0 ? handStakes : [bet]
 
-  const stand = useCallback(() => {
-    const d = [...deck]
-    let dh = [...dealerHand]
-    while (cardValue(dh) < 17) dh = [...dh, d.pop()!]
-    setDeck(d)
-    setDealerHand(dh)
-
-    const pv = cardValue(playerHand)
-    const dv = cardValue(dh)
-
-    if (dv > 21) {
-      setResult('Dealer busts — you win! 🎉')
-      onCreditsChange(bet * 2)
-    } else if (pv > dv) {
-      setResult('You win! 🎉')
-      onCreditsChange(bet * 2)
-    } else if (pv === dv) {
-      setResult('Push')
-      onCreditsChange(bet)
-    } else {
-      setResult('Dealer wins 😔')
-    }
-    setPhase('done')
-  }, [deck, dealerHand, playerHand, bet, onCreditsChange])
-
-  const doubleDown = useCallback(() => {
-    if (credits < bet) return
-    onCreditsChange(-bet)
-    const d = [...deck]
-    const hand = [...playerHand, d.pop()!]
-    setDeck(d)
-    setPlayerHand(hand)
-
-    if (cardValue(hand) > 21) {
-      setResult('Bust! 💥')
+    if (v > 21) {
+      if (multi && idx === 0) {
+        setActiveHandIdx(1)
+        return
+      }
+      if (multi && idx === 1) {
+        await finishDealer(d, dealerHand, nh, stakes)
+        return
+      }
+      setResult('Bust!')
+      setDealerReveal(true)
       setPhase('done')
       return
     }
 
-    let dh = [...dealerHand]
-    while (cardValue(dh) < 17) dh = [...dh, d.pop()!]
-    setDeck(d)
-    setDealerHand(dh)
-
-    const pv = cardValue(hand)
-    const dv = cardValue(dh)
-    const doubleBet = bet * 2
-
-    if (dv > 21) {
-      setResult('Dealer busts — you win! 🎉')
-      onCreditsChange(doubleBet * 2)
-    } else if (pv > dv) {
-      setResult('You win! 🎉')
-      onCreditsChange(doubleBet * 2)
-    } else if (pv === dv) {
-      setResult('Push')
-      onCreditsChange(doubleBet)
-    } else {
-      setResult('Dealer wins 😔')
+    if (v === 21) {
+      if (multi && idx === 0) {
+        setActiveHandIdx(1)
+        return
+      }
+      await finishDealer(d, dealerHand, nh, stakes)
     }
-    setPhase('done')
-  }, [credits, bet, deck, playerHand, dealerHand, onCreditsChange])
+  }, [resolving, deck, playerHands, activeHandIdx, dealerHand, handStakes, bet, finishDealer])
+
+  const stand = useCallback(async () => {
+    if (resolving) return
+    if (playerHands.length > 1 && activeHandIdx === 0) {
+      setActiveHandIdx(1)
+      return
+    }
+    await finishDealer(deck, dealerHand, playerHands, handStakes)
+  }, [resolving, deck, dealerHand, playerHands, handStakes, activeHandIdx, finishDealer])
+
+  const split = useCallback(() => {
+    if (resolving || phase !== 'playing') return
+    if (playerHands.length !== 1) return
+    const h = playerHands[0]
+    if (h.length !== 2 || h[0].rank !== h[1].rank) return
+    if (credits < bet) return
+    onCreditsChange(-bet)
+    const d = [...deck]
+    const a = h[0]
+    const b = h[1]
+    const nc1 = d.pop()!
+    const nc2 = d.pop()!
+    setDeck(d)
+    const h1: Card[][] = [[a, nc1], [b, nc2]]
+    setPlayerHands(h1)
+    setHandStakes([bet, bet])
+    const v0 = cardValue(h1[0])
+    const v1 = cardValue(h1[1])
+    if (v0 === 21 && v1 === 21) {
+      void finishDealer(d, dealerHand, h1, [bet, bet])
+      return
+    }
+    if (v0 === 21) {
+      setActiveHandIdx(1)
+      return
+    }
+    setActiveHandIdx(0)
+  }, [resolving, phase, playerHands, credits, bet, onCreditsChange, deck, dealerHand, finishDealer])
+
+  const doubleDown = useCallback(async () => {
+    if (resolving) return
+    if (credits < bet) return
+    const h = playerHands[activeHandIdx]
+    if (h.length !== 2) return
+    onCreditsChange(-bet)
+    const d = [...deck]
+    const nh = playerHands.map((row, i) => (i === activeHandIdx ? [...row, d.pop()!] : row))
+    const baseStakes = handStakes.length > 0 ? handStakes : [bet]
+    const stakesAfter = baseStakes.map((s, i) => (i === activeHandIdx ? s * 2 : s))
+    setDeck(d)
+    setPlayerHands(nh)
+    setHandStakes(stakesAfter)
+    const hand = nh[activeHandIdx]
+    const v = cardValue(hand)
+    const multi = playerHands.length > 1
+    const idx = activeHandIdx
+
+    if (v > 21) {
+      if (multi && idx === 0) {
+        setActiveHandIdx(1)
+        return
+      }
+      if (multi && idx === 1) {
+        await finishDealer(d, dealerHand, nh, stakesAfter)
+        return
+      }
+      setResult('Bust!')
+      setDealerReveal(true)
+      setPhase('done')
+      return
+    }
+
+    if (multi && idx === 0) {
+      setActiveHandIdx(1)
+      return
+    }
+    await finishDealer(d, dealerHand, nh, stakesAfter)
+  }, [resolving, credits, bet, playerHands, activeHandIdx, deck, dealerHand, handStakes, finishDealer, onCreditsChange])
+
+  const splittable =
+    phase === 'playing' &&
+    !resolving &&
+    playerHands.length === 1 &&
+    playerHands[0]?.length === 2 &&
+    playerHands[0][0].rank === playerHands[0][1].rank
+
+  const showActions = phase === 'playing' && !resolving
+  const gen = dealingGen.current
 
   return (
     <div className="p-4 max-w-lg mx-auto">
-      <button onClick={onBack} className="text-xs text-text-muted hover:text-dark mb-4 cursor-pointer">← Back to Casino</button>
+      <button type="button" onClick={onBack} className="text-xs text-text-muted hover:text-dark mb-4 cursor-pointer">
+        ← Back to Casino
+      </button>
       <h2 className="text-xl font-bold text-dark mb-4">🃏 Blackjack</h2>
 
       {phase === 'bet' && (
@@ -175,6 +307,7 @@ export function BlackjackGame({ credits, onCreditsChange, onBack }: BlackjackGam
             <span className="text-xs text-text-muted">Chip:</span>
             {BET_OPTIONS.map(b => (
               <button
+                type="button"
                 key={b}
                 onClick={() => setBet(b)}
                 className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors cursor-pointer ${
@@ -186,6 +319,7 @@ export function BlackjackGame({ credits, onCreditsChange, onBack }: BlackjackGam
             ))}
           </div>
           <button
+            type="button"
             onClick={deal}
             disabled={credits < bet}
             className="w-full bg-primary hover:bg-primary-hover disabled:opacity-40 text-white font-semibold py-3 rounded-xl transition-colors cursor-pointer"
@@ -198,35 +332,86 @@ export function BlackjackGame({ credits, onCreditsChange, onBack }: BlackjackGam
       {(phase === 'playing' || phase === 'done') && (
         <div className="space-y-6">
           <div>
-            <div className="text-xs text-text-muted mb-2">Dealer {phase === 'done' ? `(${cardValue(dealerHand)})` : ''}</div>
-            <div className="flex gap-2 flex-wrap">
+            <div className="text-xs text-text-muted mb-2">
+              Dealer {phase === 'done' || dealerReveal ? `(${cardValue(dealerHand)})` : ''}
+            </div>
+            <div className="flex gap-2 flex-wrap [perspective:800px]">
               {dealerHand.map((c, i) => (
-                <CardEl key={i} card={c} hidden={phase === 'playing' && i === 1} />
+                <CardEl
+                  key={`d-${gen}-${i}-${dealerReveal && i === 1 ? 'v' : 'h'}`}
+                  card={c}
+                  hidden={!dealerReveal && phase === 'playing' && i === 1}
+                  delayMs={i * 95}
+                  flip={dealerReveal && i === 1}
+                />
               ))}
             </div>
           </div>
 
-          <div>
-            <div className="text-xs text-text-muted mb-2">You ({cardValue(playerHand)})</div>
-            <div className="flex gap-2 flex-wrap">
-              {playerHand.map((c, i) => <CardEl key={i} card={c} />)}
-            </div>
+          <div className="space-y-4">
+            {playerHands.map((hand, hi) => (
+              <div key={`p-${gen}-${hi}`}>
+                <div
+                  className={`text-xs mb-2 ${hi === activeHandIdx && showActions ? 'text-primary font-semibold' : 'text-text-muted'}`}
+                >
+                  {playerHands.length > 1 ? `Hand ${hi + 1}` : 'You'} ({cardValue(hand)})
+                  {playerHands.length > 1 && hi === activeHandIdx && showActions ? ' — your turn' : ''}
+                </div>
+                <div className="flex gap-2 flex-wrap [perspective:800px]">
+                  {hand.map((c, ci) => (
+                    <CardEl key={`p-${gen}-${hi}-${ci}`} card={c} delayMs={(hi * 3 + ci + 2) * 95} />
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
 
-          {phase === 'playing' && (
-            <div className="flex gap-2">
-              <button onClick={hit} className="flex-1 bg-primary hover:bg-primary-hover text-white font-semibold py-2.5 rounded-xl cursor-pointer transition-colors">Hit</button>
-              <button onClick={stand} className="flex-1 bg-surface border border-border hover:bg-bg text-dark font-semibold py-2.5 rounded-xl cursor-pointer transition-colors">Stand</button>
-              {playerHand.length === 2 && credits >= bet && (
-                <button onClick={doubleDown} className="flex-1 bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2.5 rounded-xl cursor-pointer transition-colors">Double</button>
+          {showActions && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => void hit()}
+                className="flex-1 min-w-[100px] bg-primary hover:bg-primary-hover text-white font-semibold py-2.5 rounded-xl cursor-pointer transition-colors"
+              >
+                Hit
+              </button>
+              <button
+                type="button"
+                onClick={() => void stand()}
+                className="flex-1 min-w-[100px] bg-surface border border-border hover:bg-bg text-dark font-semibold py-2.5 rounded-xl cursor-pointer transition-colors"
+              >
+                Stand
+              </button>
+              {playerHands[activeHandIdx]?.length === 2 && credits >= bet && (
+                <button
+                  type="button"
+                  onClick={() => void doubleDown()}
+                  className="flex-1 min-w-[100px] bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2.5 rounded-xl cursor-pointer transition-colors"
+                >
+                  Double
+                </button>
+              )}
+              {splittable && credits >= bet && (
+                <button
+                  type="button"
+                  onClick={split}
+                  className="flex-1 min-w-[100px] bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl cursor-pointer transition-colors"
+                >
+                  Split
+                </button>
               )}
             </div>
+          )}
+
+          {resolving && (
+            <div className="text-center text-sm text-text-muted animate-pulse">Dealer plays…</div>
           )}
 
           {phase === 'done' && (
             <div className="space-y-3">
               <div className="text-center text-lg font-bold text-dark">{result}</div>
               <button
+                type="button"
                 onClick={() => setPhase('bet')}
                 className="w-full bg-primary hover:bg-primary-hover text-white font-semibold py-3 rounded-xl cursor-pointer transition-colors"
               >

@@ -77,3 +77,32 @@
   from { opacity: 0; transform: translate(-50%, -20px); }
   to { opacity: 1; transform: translate(-50%, 0); }
 }
+
+@keyframes bj-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes bj-flip {
+  from {
+    transform: rotateY(90deg);
+  }
+  to {
+    transform: rotateY(0);
+  }
+}
+
+.bj-card-in {
+  animation: bj-card-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.bj-flip-in {
+  animation: bj-flip 0.45s ease-out both;
+  transform-style: preserve-3d;
+}

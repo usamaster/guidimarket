@@ -105,7 +105,13 @@ Apply schema and RPC updates by running `supabase/short_selling.sql` in the SQL 
 | published_at | timestamptz nullable | When the item becomes eligible to publish |
 | impacts_already_applied | boolean | If true, `publish_due_news_items` skips moving prices (e.g. market events already adjusted prices) |
 
-Run `supabase/publish_due_news.sql` in the SQL Editor to add `impacts_already_applied` and the RPC. To reschedule all rows as unpublished with staggered future times (10 minutes apart), run `supabase/reset_news_schedule.sql` after that. The app calls `publish_due_news_items` every 30 seconds so items flip to `published` when `published_at` passes.
+**Apply in one go:** paste and run `supabase/news_queue_full.sql` in the SQL Editor (adds column + RPC + resets every row to `published = false` with `published_at = now() + 10 min × row#`). Or run `publish_due_news.sql` then `reset_news_schedule.sql` in that order.
+
+**From this repo:** `DATABASE_URL=<postgres URI from Supabase → Settings → Database>` `npm run apply-news-sql` (uses `scripts/apply-news-queue-sql.mjs`). Cursor does not have your DB password, so it cannot run SQL against your project unless you set `DATABASE_URL` locally.
+
+**If rows stay published:** the reset block never ran or failed (often missing `impacts_already_applied` before reset). Run `news_queue_full.sql` again as postgres/SQL Editor.
+
+The app calls `publish_due_news_items` on an interval so queued rows flip to `published` when `published_at` passes.
 
 ## RPC Functions
 
