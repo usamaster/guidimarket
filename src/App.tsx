@@ -319,12 +319,17 @@ function App() {
           .lte('scheduled_at', now)
           .order('scheduled_at', { ascending: true })
         if (!due || due.length === 0) return
+        const base = Date.now()
+        const staggerMs = 10 * 60 * 1000
+        let i = 0
         for (const ev of due as MarketEvent[]) {
+          i += 1
+          const publishedAt = new Date(base + i * staggerMs).toISOString()
           await supabase.from('market_events').update({ executed: true, executed_at: now } as Record<string, unknown>).eq('id', ev.id)
           for (const imp of ev.impacts) {
             await supabase.rpc('admin_adjust_price', { p_stock_id: imp.stock_id, p_percentage: imp.pct })
           }
-          await supabase.from('news_items').insert({ headline: ev.news_headline, impacts: ev.impacts, published: true, published_at: now } as Record<string, unknown>)
+          await supabase.from('news_items').insert({ headline: ev.news_headline, impacts: ev.impacts, published: true, published_at: publishedAt } as Record<string, unknown>)
         }
         setRefreshKey(k => k + 1)
       } finally {

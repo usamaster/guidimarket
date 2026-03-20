@@ -8,6 +8,7 @@ DECLARE
   imp RECORD;
   v_new_price numeric;
   v_pct numeric;
+  v_news_slot int := 0;
 BEGIN
   FOR ev IN
     SELECT * FROM market_events
@@ -32,8 +33,9 @@ BEGIN
     SET executed = true, executed_at = now()
     WHERE id = ev.id;
 
+    v_news_slot := v_news_slot + 1;
     INSERT INTO news_items (headline, impacts, published, published_at)
-    VALUES (ev.news_headline, ev.impacts, true, now());
+    VALUES (ev.news_headline, ev.impacts, true, now() + (v_news_slot * interval '10 minutes'));
   END LOOP;
 END;
 $$;

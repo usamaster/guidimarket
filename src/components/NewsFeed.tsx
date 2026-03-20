@@ -5,9 +5,20 @@ interface NewsFeedProps {
   stocks: Stock[]
 }
 
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime()
-  const mins = Math.floor(diff / 60000)
+function formatNewsTime(dateStr: string): string {
+  const t = new Date(dateStr).getTime()
+  const now = Date.now()
+  const ahead = t - now
+  if (ahead > 0) {
+    const mins = Math.floor(ahead / 60000)
+    if (mins < 1) return 'binnenkort'
+    if (mins < 60) return `over ${mins} min`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `over ${hrs} u`
+    return `over ${Math.floor(hrs / 24)} d`
+  }
+  const behind = now - t
+  const mins = Math.floor(behind / 60000)
   if (mins < 1) return 'zojuist'
   if (mins < 60) return `${mins}m geleden`
   const hrs = Math.floor(mins / 60)
@@ -21,7 +32,17 @@ export function NewsFeed({ news, stocks }: NewsFeedProps) {
 
   const published = news
     .filter(n => n.published && n.published_at)
-    .sort((a, b) => new Date(b.published_at!).getTime() - new Date(a.published_at!).getTime())
+    .sort((a, b) => {
+      const ta = new Date(a.published_at!).getTime()
+      const tb = new Date(b.published_at!).getTime()
+      const n = Date.now()
+      const af = ta > n
+      const bf = tb > n
+      if (af && bf) return ta - tb
+      if (af && !bf) return -1
+      if (!af && bf) return 1
+      return tb - ta
+    })
 
   return (
     <div className="max-w-[800px] mx-auto px-4 py-6">
@@ -50,7 +71,7 @@ export function NewsFeed({ news, stocks }: NewsFeedProps) {
                 <div className="flex items-start justify-between gap-3 mb-3">
                   <h3 className="text-sm font-semibold text-dark leading-snug flex-1">{item.headline}</h3>
                   {item.published_at && (
-                    <span className="text-[10px] text-text-muted whitespace-nowrap mt-0.5">{timeAgo(item.published_at)}</span>
+                    <span className="text-[10px] text-text-muted whitespace-nowrap mt-0.5">{formatNewsTime(item.published_at)}</span>
                   )}
                 </div>
 
