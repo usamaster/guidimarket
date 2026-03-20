@@ -104,6 +104,12 @@ function cardValue(cards: Card[]): number {
   return total
 }
 
+function canDouble911(hand: Card[] | undefined): boolean {
+  if (!hand || hand.length !== 2) return false
+  const v = cardValue(hand)
+  return v === 9 || v === 10 || v === 11
+}
+
 function delay(ms: number) {
   return new Promise<void>(resolve => setTimeout(resolve, ms))
 }
@@ -328,7 +334,7 @@ export function BlackjackGame({ credits, onCreditsChange, onBack }: BlackjackGam
   const doubleDown = useCallback(async () => {
     if (resolving) return
     const h = playerHands[activeHandIdx]
-    if (h.length !== 2) return
+    if (!canDouble911(h)) return
     const baseStakes = handStakes.length > 0 ? handStakes : [bet]
     const stakeNow = baseStakes[activeHandIdx]
     if (credits < stakeNow) return
@@ -427,8 +433,11 @@ export function BlackjackGame({ credits, onCreditsChange, onBack }: BlackjackGam
 
         {(phase === 'playing' || phase === 'done') && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between text-[11px] text-emerald-200/80 px-1">
-              <span>Table min 1 · Bet this round: <span className="text-amber-200 font-bold">{bet.toLocaleString()}</span></span>
+            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-emerald-200/80 px-1">
+              <span>
+                Table min 1 · Bet: <span className="text-amber-200 font-bold">{bet.toLocaleString()}</span>
+              </span>
+              <span className="text-emerald-200/65">Double on 9, 10, or 11</span>
             </div>
             <div>
               <div className="text-xs text-emerald-100/90 mb-2 font-medium">
@@ -481,7 +490,7 @@ export function BlackjackGame({ credits, onCreditsChange, onBack }: BlackjackGam
                 >
                   Stand
                 </button>
-                {playerHands[activeHandIdx]?.length === 2 && credits >= activeStake && (
+                {canDouble911(playerHands[activeHandIdx]) && credits >= activeStake && (
                   <button
                     type="button"
                     onClick={() => void doubleDown()}
