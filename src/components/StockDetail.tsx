@@ -4,6 +4,13 @@ import type { Stock, PricePoint, Trade, Portfolio, ShortPosition } from '../lib/
 import { supabase } from '../lib/supabase'
 import { MAX_TRADE_QUANTITY, TRADE_COOLDOWN_MS, SHORT_COLLATERAL_RATIO } from '../lib/constants'
 
+function formatTradeError(message: string, shortRelated: boolean): string {
+  if (shortRelated && message.toLowerCase().includes('invalid trade type')) {
+    return 'Short selling is not enabled on the database yet. In Supabase: SQL Editor → paste and run the file supabase/short_selling.sql → then reload this app.'
+  }
+  return message
+}
+
 interface StockDetailProps {
   stock: Stock
   history: PricePoint[]
@@ -104,7 +111,7 @@ export function StockDetail({ stock, history, trades, portfolio, userHolding, us
       p_quantity: quantity,
     })
     if (rpcError) {
-      setError(rpcError.message)
+      setError(formatTradeError(rpcError.message, tab === 'short'))
       setSubmitting(false)
       return
     }
@@ -124,7 +131,7 @@ export function StockDetail({ stock, history, trades, portfolio, userHolding, us
       p_quantity: userShort.quantity,
     })
     if (rpcError) {
-      setError(rpcError.message)
+      setError(formatTradeError(rpcError.message, true))
       setSubmitting(false)
       return
     }
