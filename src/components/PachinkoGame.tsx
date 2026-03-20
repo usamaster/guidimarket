@@ -17,12 +17,12 @@ const WIDTH = (COLS + 2) * PIN_GAP
 const HEIGHT = (ROWS + 4) * PIN_GAP
 
 const ODDS_SETS: { id: string; name: string; color: string; edge: string; mults: number[] }[] = [
-  { id: 'mild',     name: '🟢 Mild',     color: '#22c55e', edge: '~7%',  mults: [30, 10, 3, 1.5, 1, 0.7, 0.4, 0.7, 1, 1.5, 3, 10, 30] },
-  { id: 'standard', name: '🔵 Standard', color: '#3b82f6', edge: '~9%',  mults: [170, 18, 5, 1.6, 0.8, 0.4, 0.2, 0.4, 0.8, 1.6, 5, 18, 170] },
-  { id: 'spicy',    name: '🟠 Spicy',    color: '#f97316', edge: '~13%', mults: [600, 25, 4, 1, 0.4, 0.2, 0.1, 0.2, 0.4, 1, 4, 25, 600] },
-  { id: 'brutal',   name: '🔴 Brutal',   color: '#ef4444', edge: '~22%', mults: [1000, 15, 2, 0.5, 0.2, 0.1, 0, 0.1, 0.2, 0.5, 2, 15, 1000] },
-  { id: 'degen',    name: '💀 Degen',    color: '#a855f7', edge: '~28%', mults: [1300, 8, 0.8, 0.1, 0, 0, 0, 0, 0, 0.1, 0.8, 8, 1300] },
-  { id: 'tight',    name: '🧊 Tight',    color: '#64748b', edge: '~10%', mults: [15, 5, 3, 1.5, 1, 0.7, 0.4, 0.7, 1, 1.5, 3, 5, 15] },
+  { id: 'mild',     name: '🟢 Mild',     color: '#22c55e', edge: '~1%',  mults: [50, 14, 4, 2, 1.4, 1.1, 0.9, 1.1, 1.4, 2, 4, 14, 50] },
+  { id: 'standard', name: '🔵 Standard', color: '#3b82f6', edge: '~2%',  mults: [250, 25, 7, 2.5, 1.3, 0.8, 0.6, 0.8, 1.3, 2.5, 7, 25, 250] },
+  { id: 'spicy',    name: '🟠 Spicy',    color: '#f97316', edge: '~2%',  mults: [800, 35, 6, 1.8, 0.9, 0.5, 0.4, 0.5, 0.9, 1.8, 6, 35, 800] },
+  { id: 'brutal',   name: '🔴 Brutal',   color: '#ef4444', edge: '~3%',  mults: [1500, 25, 4, 1.2, 0.5, 0.3, 0.2, 0.3, 0.5, 1.2, 4, 25, 1500] },
+  { id: 'degen',    name: '💀 Degen',    color: '#a855f7', edge: '~3%',  mults: [2000, 15, 2, 0.5, 0.2, 0.1, 0.05, 0.1, 0.2, 0.5, 2, 15, 2000] },
+  { id: 'tight',    name: '🧊 Tight',    color: '#64748b', edge: '~1%',  mults: [25, 10, 4.5, 2.2, 1.4, 1.1, 0.9, 1.1, 1.4, 2.2, 4.5, 10, 25] },
 ]
 
 function slotColor(m: number): string {
