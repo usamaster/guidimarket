@@ -95,6 +95,18 @@ Apply schema and RPC updates by running `supabase/short_selling.sql` in the SQL 
 | content | text | Max 500 chars (frontend enforced) |
 | created_at | timestamptz | |
 
+### `news_items`
+| Column | Type | Notes |
+|--------|------|-------|
+| headline | text | |
+| image_url | text nullable | |
+| impacts | jsonb | `{ stock_id, ticker, pct }[]` |
+| published | boolean | Visible in feed and snackbar when true |
+| published_at | timestamptz nullable | When the item becomes eligible to publish |
+| impacts_already_applied | boolean | If true, `publish_due_news_items` skips moving prices (e.g. market events already adjusted prices) |
+
+Run `supabase/publish_due_news.sql` in the SQL Editor to add `impacts_already_applied` and the RPC. To reschedule all rows as unpublished with staggered future times (10 minutes apart), run `supabase/reset_news_schedule.sql` after that. The app calls `publish_due_news_items` every 30 seconds so items flip to `published` when `published_at` passes.
+
 ## RPC Functions
 
 ### `init_portfolio(p_user_id uuid) → portfolios`
@@ -112,13 +124,14 @@ Picks 3-5 random stocks, creates fake buy/sell trades (qty 1-5) with bot names (
 ### `generate_micro_trades() → void`
 Picks 5-10 random stocks, creates single-unit fake trades with smaller impact (0.05-0.2%). Bot names: FloorTrader, ScalpKing, NanoTrader, etc.
 
-### `publish_next_news() → void`
-Picks a random unpublished news item, sets `published = true` and `published_at = now()`, then applies all stock price impacts from the item's `impacts` JSONB array. Called by pg_cron every ~13 minutes.
+### `publish_due_news_items() → void`
+Sets `published = true` on every row where `published = false` and `published_at <= now()`, ordered by `published_at`. Applies `impacts` to `stocks` / `price_history` when `impacts_already_applied` is false, then sets that flag true. Invoked from the frontend on an interval and safe to call repeatedly.
+
+Legacy `publish_next_news()` (random pick) conflicts with scheduled publishing; unschedule `news-publisher` if you use `publish_due_news_items` and `reset_news_schedule.sql`.
 
 ## Cron Jobs (pg_cron)
 
-**Active:**
-- `news-publisher` — runs every 13 minutes, calls `publish_next_news()` to release a random news item and apply stock impacts
+**Active:** (varies by project; confirm in SQL) If `news-publisher` calls `publish_next_news`, remove it when using `publish_due_news_items`.
 
 **Disabled** (fake trades). To re-enable:
 

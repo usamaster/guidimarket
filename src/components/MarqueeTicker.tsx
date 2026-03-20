@@ -10,7 +10,7 @@ export function MarqueeTicker({ stocks }: MarqueeTickerProps) {
   const items = [...stocks, ...stocks]
 
   return (
-    <div className="bg-dark text-white overflow-hidden whitespace-nowrap h-8 flex items-center text-xs font-mono">
+    <div className="bg-inverse-bg text-white overflow-hidden whitespace-nowrap h-8 flex items-center text-xs font-mono">
       <div className="animate-[marquee_40s_linear_infinite] flex gap-6 pr-6">
         {items.map((s, i) => {
           const pctChange = s.previous_close > 0

@@ -148,6 +148,15 @@ function App() {
   }, [])
 
   useEffect(() => {
+    const tick = () => {
+      void supabase.rpc('publish_due_news_items')
+    }
+    tick()
+    const id = setInterval(tick, 30_000)
+    return () => clearInterval(id)
+  }, [])
+
+  useEffect(() => {
     if (!session) return
     let cancelled = false
     loadAllData(session.user.id).then(result => {
@@ -329,7 +338,7 @@ function App() {
           for (const imp of ev.impacts) {
             await supabase.rpc('admin_adjust_price', { p_stock_id: imp.stock_id, p_percentage: imp.pct })
           }
-          await supabase.from('news_items').insert({ headline: ev.news_headline, impacts: ev.impacts, published: true, published_at: publishedAt } as Record<string, unknown>)
+          await supabase.from('news_items').insert({ headline: ev.news_headline, impacts: ev.impacts, published: false, published_at: publishedAt, impacts_already_applied: true } as Record<string, unknown>)
         }
         setRefreshKey(k => k + 1)
       } finally {

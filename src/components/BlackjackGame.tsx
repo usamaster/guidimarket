@@ -47,7 +47,7 @@ function CardEl({ card, hidden }: { card: Card; hidden?: boolean }) {
   }
   const red = card.suit === '♥' || card.suit === '♦'
   return (
-    <div className={`w-16 h-24 rounded-lg bg-white border-2 border-border flex flex-col items-center justify-center shadow-md ${red ? 'text-red-500' : 'text-gray-900'}`}>
+    <div className={`w-16 h-24 rounded-lg bg-card border-2 border-border flex flex-col items-center justify-center shadow-md ${red ? 'text-red-500' : 'text-card-ink'}`}>
       <span className="text-lg font-bold leading-none">{card.rank}</span>
       <span className="text-xl leading-none">{card.suit}</span>
     </div>

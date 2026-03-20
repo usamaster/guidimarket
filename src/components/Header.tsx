@@ -1,3 +1,5 @@
+import { toggleTheme } from '../lib/theme'
+
 interface HeaderProps {
   credits: number
   portfolioValue: number
@@ -59,6 +61,16 @@ export function Header({ credits, portfolioValue, username, isAdmin, showAdmin, 
           </div>
 
           <div className="h-5 w-px bg-border" />
+
+          <button
+            type="button"
+            onClick={() => toggleTheme()}
+            className="w-9 h-9 rounded-full border border-border bg-surface text-lg flex items-center justify-center hover:bg-bg transition-colors cursor-pointer shrink-0"
+            aria-label="Toggle theme"
+          >
+            <span className="dark:hidden">🌙</span>
+            <span className="hidden dark:inline">☀️</span>
+          </button>
 
           {isAdmin && (
             <button

@@ -23,7 +23,7 @@ export function NewsSnackbar({ item, onDismiss, onNavigate }: NewsSnackbarProps)
       onClick={() => { onDismiss(); onNavigate() }}
       className="fixed top-20 left-1/2 -translate-x-1/2 z-[60] max-w-md w-full px-4 cursor-pointer animate-[slideDown_0.3s_ease-out]"
     >
-      <div className="bg-dark text-white rounded-xl shadow-2xl px-4 py-3 flex items-start gap-3">
+      <div className="bg-inverse-bg text-white rounded-xl shadow-2xl px-4 py-3 flex items-start gap-3">
         <span className="text-lg">📰</span>
         <div className="flex-1 min-w-0">
           <div className="text-[10px] text-primary font-bold uppercase tracking-wide mb-0.5">Breaking News</div>

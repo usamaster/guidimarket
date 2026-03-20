@@ -71,11 +71,15 @@ export function StockDetail({ stock, history, trades, portfolio, userHolding, us
 
   useEffect(() => {
     if (!chartRef.current) return
+    const isDark = () => document.documentElement.classList.contains('dark')
+    const chartTheme = () => ({
+      layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: isDark() ? '#a1a1aa' : '#999' },
+      grid: { vertLines: { color: isDark() ? '#27272a' : '#f0f0f0' }, horzLines: { color: isDark() ? '#27272a' : '#f0f0f0' } },
+    })
     const chart = createChart(chartRef.current, {
       width: chartRef.current.clientWidth,
       height: 220,
-      layout: { background: { type: ColorType.Solid, color: 'transparent' }, textColor: '#999' },
-      grid: { vertLines: { color: '#f0f0f0' }, horzLines: { color: '#f0f0f0' } },
+      ...chartTheme(),
       rightPriceScale: { borderVisible: false },
       timeScale: { borderVisible: false, timeVisible: true },
       crosshair: { horzLine: { style: LineStyle.Dashed }, vertLine: { style: LineStyle.Dashed } },
@@ -96,8 +100,14 @@ export function StockDetail({ stock, history, trades, portfolio, userHolding, us
 
     chartApiRef.current = chart
     const onResize = () => chart.applyOptions({ width: chartRef.current?.clientWidth || 400 })
+    const onTheme = () => chart.applyOptions(chartTheme())
     window.addEventListener('resize', onResize)
-    return () => { window.removeEventListener('resize', onResize); chart.remove() }
+    window.addEventListener('themechange', onTheme)
+    return () => {
+      window.removeEventListener('resize', onResize)
+      window.removeEventListener('themechange', onTheme)
+      chart.remove()
+    }
   }, [history, stock])
 
   const handleTrade = async () => {

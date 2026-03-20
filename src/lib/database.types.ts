@@ -68,6 +68,7 @@ export interface NewsItem {
   impacts: { stock_id: string; ticker: string; pct: number }[]
   published: boolean
   published_at: string | null
+  impacts_already_applied?: boolean
   created_at: string
 }
 
