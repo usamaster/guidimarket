@@ -475,38 +475,51 @@ export function BlackjackGame({ credits, onCreditsChange, onBack }: BlackjackGam
             </div>
 
             {showActions && (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void hit()}
-                  className="flex-1 min-w-[100px] bg-primary hover:bg-primary-hover text-white font-semibold py-2.5 rounded-xl cursor-pointer transition-colors"
-                >
-                  Hit
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void stand()}
-                  className="flex-1 min-w-[100px] bg-emerald-950/80 border border-white/20 hover:bg-emerald-950 text-emerald-50 font-semibold py-2.5 rounded-xl cursor-pointer transition-colors"
-                >
-                  Stand
-                </button>
-                {canDouble911(playerHands[activeHandIdx]) && credits >= activeStake && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                   <button
                     type="button"
-                    onClick={() => void doubleDown()}
-                    className="flex-1 min-w-[100px] bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2.5 rounded-xl cursor-pointer transition-colors"
+                    onClick={() => void hit()}
+                    className="bg-primary hover:bg-primary-hover text-white font-semibold py-2.5 rounded-xl cursor-pointer transition-colors"
                   >
-                    Double
+                    Hit
                   </button>
-                )}
-                {splittable && credits >= bet && (
                   <button
                     type="button"
-                    onClick={split}
-                    className="flex-1 min-w-[100px] bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl cursor-pointer transition-colors"
+                    onClick={() => void stand()}
+                    className="bg-emerald-950/80 border border-white/20 hover:bg-emerald-950 text-emerald-50 font-semibold py-2.5 rounded-xl cursor-pointer transition-colors"
                   >
-                    Split
+                    Stand
                   </button>
+                  {canDouble911(playerHands[activeHandIdx]) && (
+                    <button
+                      type="button"
+                      disabled={credits < activeStake}
+                      onClick={() => void doubleDown()}
+                      title={
+                        credits < activeStake
+                          ? `Double costs another ${activeStake.toLocaleString()} — leave balance ≥ bet before deal`
+                          : 'Double down (one card)'
+                      }
+                      className="bg-yellow-500 hover:bg-yellow-600 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold py-2.5 rounded-xl cursor-pointer transition-colors"
+                    >
+                      Double
+                    </button>
+                  )}
+                  {splittable && credits >= bet && (
+                    <button
+                      type="button"
+                      onClick={split}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2.5 rounded-xl cursor-pointer transition-colors"
+                    >
+                      Split
+                    </button>
+                  )}
+                </div>
+                {canDouble911(playerHands[activeHandIdx]) && credits < activeStake && (
+                  <p className="text-[10px] text-center text-amber-200/90 leading-snug px-1">
+                    Double needs +{activeStake.toLocaleString()} in balance (same as your bet). Bet less on deal or add credits.
+                  </p>
                 )}
               </div>
             )}
