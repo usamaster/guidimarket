@@ -350,10 +350,12 @@ const TYPE_LABELS: Record<string, string> = {
   runner_up: t.predictions.runnerUp,
   third: t.predictions.third,
   fourth: t.predictions.fourth,
+  most_goals_against: t.predictions.mostGoalsAgainst,
   top_scorer: t.predictions.topScorer,
   golden_ball: t.predictions.goldenBall,
   young_player: t.predictions.youngPlayer,
   golden_glove: t.predictions.goldenGlove,
+  dutch_zero_minutes: t.predictions.dutchZeroMinutes,
   total_goals: t.predictions.totalGoals,
   total_red_cards: t.predictions.totalRedCards,
   total_yellow_cards: t.predictions.totalYellowCards,
@@ -367,8 +369,8 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 const TYPE_ORDER = [
-  'winner', 'runner_up', 'third', 'fourth',
-  'top_scorer', 'golden_ball', 'young_player', 'golden_glove',
+  'winner', 'runner_up', 'third', 'fourth', 'most_goals_against',
+  'top_scorer', 'golden_ball', 'young_player', 'golden_glove', 'dutch_zero_minutes',
   'total_goals', 'total_red_cards', 'total_yellow_cards', 'total_penalties', 'highest_match_goals',
   'host_reaches_qf', 'undefeated_team_exists', 'any_zero_zero', 'final_goes_to_et', 'hat_trick_scored',
 ]

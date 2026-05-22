@@ -49,13 +49,21 @@ const TEAM_FIELDS: ReadonlyArray<{ type: PredictionType; label: string }> = [
   { type: 'runner_up', label: t.predictions.runnerUp },
   { type: 'third', label: t.predictions.third },
   { type: 'fourth', label: t.predictions.fourth },
+  { type: 'most_goals_against', label: t.predictions.mostGoalsAgainst },
 ] as const
 
-const PLAYER_FIELDS: ReadonlyArray<{ type: PredictionType; label: string }> = [
+const PLAYER_FIELDS: ReadonlyArray<{ type: PredictionType; label: string; placeholder?: string; hint?: string; fullWidth?: boolean }> = [
   { type: 'top_scorer', label: t.predictions.topScorer },
   { type: 'golden_ball', label: t.predictions.goldenBall },
   { type: 'young_player', label: t.predictions.youngPlayer },
   { type: 'golden_glove', label: t.predictions.goldenGlove },
+  {
+    type: 'dutch_zero_minutes',
+    label: t.predictions.dutchZeroMinutes,
+    placeholder: t.predictions.dutchZeroMinutesPlaceholder,
+    hint: t.predictions.dutchZeroMinutesHint,
+    fullWidth: true,
+  },
 ] as const
 
 const NUMBER_FIELDS: ReadonlyArray<{ type: PredictionType; label: string }> = [
@@ -379,10 +387,10 @@ export function PredictionsPage({
               </label>
             )
           })}
-          {PLAYER_FIELDS.map(({ type, label }) => {
+          {PLAYER_FIELDS.map(({ type, label, placeholder, hint, fullWidth }) => {
             const v = getTournament(draft, type)
             return (
-              <label key={type} className="flex flex-col gap-1.5">
+              <label key={type} className={`flex flex-col gap-1.5 ${fullWidth ? 'sm:col-span-2' : ''}`}>
                 <span className="text-xs font-medium text-text-secondary flex items-center justify-between gap-2">
                   {label}
                   {renderEarnedBadge(type)}
@@ -391,9 +399,10 @@ export function PredictionsPage({
                   type="text"
                   value={v.string_value || ''}
                   onChange={e => setTournament(type, { string_value: e.target.value || null })}
-                  placeholder={t.predictions.playerNamePlaceholder}
+                  placeholder={placeholder || t.predictions.playerNamePlaceholder}
                   className="bg-bg border border-border rounded-md px-2 py-2 text-sm text-dark focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
                 />
+                {hint && <span className="text-[11px] text-text-muted">{hint}</span>}
               </label>
             )
           })}

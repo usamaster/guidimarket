@@ -13,6 +13,7 @@
     "apply-scoring": "node --env-file=.env scripts/apply-sql.mjs supabase/scoring.sql",
     "apply-lock": "node --env-file=.env scripts/apply-sql.mjs supabase/lock-predictions.sql",
     "apply-chat": "node --env-file=.env scripts/apply-sql.mjs supabase/chat.sql",
+    "apply-scoring-extra": "node --env-file=.env scripts/apply-sql.mjs supabase/scoring-extra.sql",
     "seed-worldcup": "node --env-file=.env scripts/seed-worldcup.mjs"
   },
   "dependencies": {

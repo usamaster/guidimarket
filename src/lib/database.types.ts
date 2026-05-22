@@ -73,6 +73,8 @@ export type PredictionType =
   | 'any_zero_zero'
   | 'final_goes_to_et'
   | 'hat_trick_scored'
+  | 'most_goals_against'
+  | 'dutch_zero_minutes'
 
 export interface TournamentPrediction {
   id: string
