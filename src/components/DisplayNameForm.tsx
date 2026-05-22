@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { t } from '../lib/i18n'
 
 interface DisplayNameFormProps {
   userId: string
@@ -15,18 +16,18 @@ export function DisplayNameForm({ userId, onSaved }: DisplayNameFormProps) {
     e.preventDefault()
     const trimmed = name.trim()
     if (trimmed.length < 2) {
-      setError('Name must be at least 2 characters')
+      setError(t.auth.nameTooShort)
       return
     }
     if (trimmed.length > 20) {
-      setError('Name must be 20 characters or fewer')
+      setError(t.auth.nameTooLong)
       return
     }
     setSaving(true)
     setError('')
 
     const { error: err } = await supabase
-      .from('portfolios')
+      .from('profiles')
       .update({ display_name: trimmed } as Record<string, unknown>)
       .eq('user_id', userId)
 
@@ -41,13 +42,13 @@ export function DisplayNameForm({ userId, onSaved }: DisplayNameFormProps) {
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center p-4">
       <form onSubmit={handleSubmit} className="w-full max-w-xs">
-        <h1 className="text-xl font-bold text-dark text-center mb-1">Choose a display name</h1>
-        <p className="text-text-muted text-sm text-center mb-6">This is how others will see you on the leaderboard and trades</p>
+        <h1 className="text-xl font-bold text-dark text-center mb-1">{t.auth.chooseDisplayName}</h1>
+        <p className="text-text-muted text-sm text-center mb-6">{t.auth.displayNameHint}</p>
         <input
           type="text"
           value={name}
           onChange={e => setName(e.target.value)}
-          placeholder="Your display name"
+          placeholder={t.auth.displayNamePlaceholder}
           maxLength={20}
           className="w-full px-3 py-2 rounded-lg border border-border bg-surface text-dark text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary mb-3"
           autoFocus
@@ -58,7 +59,7 @@ export function DisplayNameForm({ userId, onSaved }: DisplayNameFormProps) {
           disabled={saving}
           className="w-full py-2.5 rounded-lg bg-primary text-white text-sm font-semibold hover:bg-primary-hover transition-colors disabled:opacity-50 cursor-pointer"
         >
-          {saving ? 'Saving…' : 'Continue'}
+          {saving ? t.auth.saving : t.auth.continue}
         </button>
       </form>
     </div>

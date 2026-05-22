@@ -1,6 +1,7 @@
-export const ADMIN_USER_ID = 'b330e6ae-5ef6-47c4-9e24-0b06fd932908'
-export const USERNAME_DOMAIN = 'guidimarket.app'
-export const MAX_TRADE_QUANTITY = 50
-export const SHORT_COLLATERAL_RATIO = 2
-export const TRADE_COOLDOWN_MS = 5_000
-export const DAILY_TRADE_LIMIT = 400
+export const ADMIN_USER_ID = 'caec526d-d38c-462b-a585-bbd2e119ed3f'
+export const APP_NAME = 'WK 2026 Voorspelpool'
+export const BUYIN_EUR = 15
+export const MIN_SIDE_BET_STAKE = 1
+
+export const GROUP_LETTERS = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'] as const
+export type GroupLetter = typeof GROUP_LETTERS[number]

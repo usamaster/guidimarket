@@ -1,5 +1,5 @@
 {
-  "name": "landalf-stock-market",
+  "name": "wk2026-voorspelpool",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -7,8 +7,12 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "lint-fix": "eslint . --fix",
     "preview": "vite preview",
-    "apply-news-sql": "node --env-file=.env scripts/apply-news-queue-sql.mjs"
+    "apply-schema": "node --env-file=.env scripts/apply-schema.mjs",
+    "apply-scoring": "node --env-file=.env scripts/apply-sql.mjs supabase/scoring.sql",
+    "apply-lock": "node --env-file=.env scripts/apply-sql.mjs supabase/lock-predictions.sql",
+    "seed-worldcup": "node --env-file=.env scripts/seed-worldcup.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.1",

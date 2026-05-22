@@ -1,216 +1,284 @@
-# GuidiMarket — Supabase Infrastructure
+# WK 2026 Voorspelpool — Supabase Infrastructure
 
 ## Project
 
-- **Supabase Project Ref**: `inxcedeyqqbusetvmpxz`
-- **Dashboard**: https://supabase.com/dashboard/project/inxcedeyqqbusetvmpxz
-- **DB Connection**: `postgresql://postgres:<password>@db.inxcedeyqqbusetvmpxz.supabase.co:5432/postgres`
-- **Production URL**: https://guidimarket.vercel.app
+- **Supabase Project Ref**: `adeactqablfksthhkbay`
+- **Dashboard**: https://supabase.com/dashboard/project/adeactqablfksthhkbay
+- **DB Connection**: `postgresql://postgres:<password>@db.adeactqablfksthhkbay.supabase.co:5432/postgres`
 - **Auth method**: Magic link (email OTP) — no passwords
+- **UI language**: Dutch (NL). All copy lives in `src/lib/i18n.ts`.
 
 ## Admin User
 
-- **Email**: `ufarag@protonmail.com`
-- **User ID**: `b330e6ae-5ef6-47c4-9e24-0b06fd932908`
-- Admin ID is hardcoded in two places:
+- **User ID**: `caec526d-d38c-462b-a585-bbd2e119ed3f`
+- Hardcoded in:
   1. `src/lib/constants.ts` → `ADMIN_USER_ID` (frontend gating)
-  2. `admin_adjust_price()` SQL function (server-side authorization)
+  2. `is_admin()` SQL function (server-side authorization for every `admin_*` RPC)
+
+## Currencies (two, kept separate)
+
+| Currency | Column | Used for | Refilled by |
+|----------|--------|----------|-------------|
+| Voorspellingspunten (prediction points) | `profiles.prediction_points int` | Drives the EUR prize-pot ranking | Admin / future scoring RPC |
+| Tokens | `profiles.tokens numeric` | Asymmetric peer-to-peer side bets | Admin via `admin_topup_tokens` after irl payment. **Everyone starts at 0 tokens.** |
+
+The real-money pool is tracked via `profiles.paid_in boolean`. Each user pays €15 irl; admin flips `paid_in = true` via `admin_set_paid_in(user_id, true)`. The `PrizePotBanner` shows `paid_count × buyin_eur` from `app_state.buyin_eur` (default 15).
 
 ## Database Schema
 
-### `stocks`
+### `app_state` (single row, id = 1)
+
 | Column | Type | Notes |
 |--------|------|-------|
-| id | uuid PK | |
-| ticker | text | e.g. `CHEESE`, `SLORV` |
-| name | text | Full name |
-| emoji | text | Display emoji |
-| current_price | numeric | Live price, updated on every trade |
-| previous_close | numeric | Snapshot for % change calc |
+| id | int PK | always 1 |
+| buyin_eur | numeric default 15 | shown in banner |
+| main_winner_user_id | uuid nullable | flipped via admin RPC after the tournament |
+| predictions_locked | bool default false | once true: writes blocked, others' predictions become readable |
+| updated_at | timestamptz | |
+
+### `profiles`
+
+| Column | Type | Notes |
+|--------|------|-------|
+| user_id | uuid PK → auth.users | |
+| display_name | text | Set on first login |
+| tokens | numeric default 0 | Side-bet currency |
+| prediction_points | int default 0 | Main-game ranking |
+| paid_in | bool default false | Did they pay €15 irl? |
 | created_at | timestamptz | |
 
-### `price_history`
+### `teams`
+
+48 teams seeded from the openfootball repo. Has `name`, `fifa_code`, `flag_emoji`, `group_letter` (A..L).
+
+### `matches`
+
+104 fixtures seeded from the openfootball repo. `kickoff_at` is stored in UTC. Knockout placeholders (`W101`, `2A`, etc.) live in `team1_placeholder` / `team2_placeholder` and get nulled out in favour of `team1_id` / `team2_id` once the live-score worker resolves them.
+
+All score columns (`team1_score`, `team1_ht`, `team1_et`, `team1_pen`, `yellow_cards`, `red_cards`, ...) are nullable — populated later by the live-score worker.
+
+### `tournament_predictions`
+
+Flexible bag of single-row-per-`(user, prediction_type, round_locked)` predictions. `prediction_type` examples: `winner`, `runner_up`, `third`, `fourth`, `top_scorer`, `golden_ball`, `young_player`, `golden_glove`, `total_goals`, `total_red_cards`, `total_yellow_cards`, `total_penalties`, `highest_match_goals`, `host_reaches_qf`, `undefeated_team_exists`, `any_zero_zero`, `final_goes_to_et`, `hat_trick_scored`. Holds `team_id` / `string_value` / `number_value` / `bool_value` so any prediction shape fits.
+
+`round_locked` defaults to `'pre_tournament'` and leaves room for a future `'post_group_stage'` round without a schema change.
+
+### `group_predictions`
+
+Per-user, per-group ranking 1..4. Unique on `(user_id, group_letter, round_locked)`.
+
+### `match_predictions`
+
+Per-user 90-minute score predictions for every individual match. Unique on `(user_id, match_id)`.
+
+Columns:
+
+- `team1_score int`, `team2_score int` — predicted 90-minute regular-time scores (no extra time, no penalties).
+- `boost_applied bool default false` — when true, the match's calculated points are doubled.
+- `points_awarded int`, `resolved bool`, `resolved_at timestamptz` — populated by `score_predictions()`.
+
+### `tournament_results`
+
+Single row per `prediction_type`. Stores the actual outcome of every tournament-level prediction so the scoring RPC can compare against it.
+
 | Column | Type | Notes |
 |--------|------|-------|
-| id | uuid PK | |
-| stock_id | uuid FK → stocks | |
-| price | numeric | |
-| created_at | timestamptz | One row per price change |
+| prediction_type | text PK | matches the `prediction_type` value used in `tournament_predictions` |
+| team_id | uuid → teams.id | filled for `winner` / `runner_up` / `third` / `fourth` |
+| string_value | text | filled for player awards (`top_scorer`, `golden_ball`, `young_player`, `golden_glove`) |
+| number_value | numeric | filled for totals (`total_goals`, `total_red_cards`, ...) |
+| bool_value | bool | filled for drama yes/no questions |
 
-### `portfolios`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| user_id | uuid UNIQUE | FK → auth.users |
-| credits | numeric | Starting balance: 1000 |
-| display_name | text | Set by user on first login |
-| created_at | timestamptz | |
+## Scoring System
 
-### `holdings`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| user_id | uuid | |
-| stock_id | uuid | |
-| quantity | integer | |
-| avg_buy_price | numeric | Weighted average |
+### Per-match (90 minutes only — penalties never count)
 
-Unique constraint on `(user_id, stock_id)`.
+Base points (max 10 in the group stage):
 
-### `short_positions`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| user_id | uuid | FK → auth.users |
-| stock_id | uuid | FK → stocks |
-| quantity | integer | Short size |
-| entry_price | numeric | Exec price at open |
-| collateral | numeric | Typically 2× notional |
-| created_at | timestamptz | |
+| Component | Points |
+|-----------|--------|
+| Correct winner / draw | +4 |
+| Correct goal difference | +2 |
+| Exact team1 goals | +1 |
+| Exact team2 goals | +1 |
+| Exact-score bonus (team1 + team2 both right) | +2 |
 
-Unique constraint on `(user_id, stock_id)`. One open short per stock per user.
+Stage multiplier (applied to the base sum, then rounded to int):
 
-Apply schema and RPC updates by running `supabase/short_selling.sql` in the SQL Editor. Afterward, enable Realtime if needed: `ALTER PUBLICATION supabase_realtime ADD TABLE short_positions;`
+| Round | Multiplier |
+|-------|------------|
+| Group | 1× |
+| Round of 32 | 1.25× |
+| Round of 16 | 1.5× |
+| Quarter-final | 2× |
+| Semi-final | 2.5× |
+| Match for third place | 2× |
+| Final | 3× |
 
-### `trades`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| stock_id | uuid | |
-| user_id | uuid nullable | null for bot trades |
-| username | text | Display name of trader |
-| type | text | `buy`, `sell`, `short`, or `cover` |
-| quantity | integer | |
-| price | numeric | Price at time of trade |
-| total | numeric | price × quantity |
-| is_fake | boolean | true for bot/fake trades |
-| created_at | timestamptz | |
+### Boosts (`match_predictions.boost_applied`)
 
-### `messages`
-| Column | Type | Notes |
-|--------|------|-------|
-| id | uuid PK | |
-| user_id | uuid | |
-| display_name | text | Cached display name |
-| content | text | Max 500 chars (frontend enforced) |
-| created_at | timestamptz | |
+Each user has 3 boosts per stage (group / r32 / r16 / qf / sf / final_phase). A boost doubles the multiplied points for that single match. Toggleable via the `apply_boost(match_id, applied)` RPC, which:
 
-### `news_items`
-| Column | Type | Notes |
-|--------|------|-------|
-| headline | text | |
-| image_url | text nullable | |
-| impacts | jsonb | `{ stock_id, ticker, pct }[]` |
-| published | boolean | Visible in feed and snackbar when true |
-| published_at | timestamptz nullable | When the item becomes eligible to publish |
-| impacts_already_applied | boolean | If true, `publish_due_news_items` skips moving prices (e.g. market events already adjusted prices) |
+1. Rejects if the match has already kicked off.
+2. Rejects if turning a boost on would exceed 3 used boosts in that stage.
+3. Upserts the `match_predictions` row.
 
-**Apply in one go:** paste and run `supabase/news_queue_full.sql` in the SQL Editor (adds column + RPC + resets every row to `published = false` with `published_at = now() + 10 min × row#`). Or run `publish_due_news.sql` then `reset_news_schedule.sql` in that order.
+### Tournament awards
 
-**From this repo:** `DATABASE_URL=<postgres URI from Supabase → Settings → Database>` `npm run apply-news-sql` (uses `scripts/apply-news-queue-sql.mjs`). Cursor does not have your DB password, so it cannot run SQL against your project unless you set `DATABASE_URL` locally.
+| Prediction | Exact | Consolation (predicted team made the semis) |
+|------------|-------|----------------------------------------------|
+| Winner | 25 | 4 |
+| Runner-up | 15 | 4 |
+| Third | 8 | 4 |
+| Fourth | 8 | 4 |
 
-**If rows stay published:** the reset block never ran or failed (often missing `impacts_already_applied` before reset). Run `news_queue_full.sql` again as postgres/SQL Editor.
+### Player awards (case-insensitive trim match)
 
-The app calls `publish_due_news_items` on an interval so queued rows flip to `published` when `published_at` passes.
+| Prediction | Points |
+|------------|--------|
+| Topscorer | 15 |
+| Beste speler / Beste jongere / Beste keeper | 10 each |
+
+### Totals (proximity scoring)
+
+Diff = `abs(actual − predicted)`:
+
+| Diff | Points |
+|------|--------|
+| 0 | 15 |
+| ≤ 2 | 12 |
+| ≤ 5 | 8 |
+| ≤ 10 | 4 |
+| > 10 | 0 |
+
+### Drama yes/no
+
+Correct → 5, wrong → 0.
+
+### Recompute (`score_predictions()`)
+
+Admin-only RPC. Loops every player and:
+
+1. Resets / fills `match_predictions.points_awarded` for finished matches.
+2. Compares `tournament_predictions` rows against `tournament_results`, fills `points_awarded`.
+3. Sums all of the above into `profiles.prediction_points`, which drives the leaderboard and the prize-pot banner.
+
+Idempotent. Run after each ingest.
+
+### `side_bet_templates`
+
+Premade Dutch fun bets (see `scripts/seed-worldcup.mjs` for the list). Each row has `key`, `label`, `description`, `category` (`goals|cards|drama|result`), `applies_to_stage` (`any|group|knockout`), and the `side_a_label` / `side_b_label` strings (with `{team1}` / `{team2}` placeholders).
+
+### `side_bets`
+
+Asymmetric peer-to-peer bets. `proposer_stake` and `opponent_stake` are independent — a player can offer "200 vs 100" trash-talk odds. `invited_user_id` is set when targeting a specific friend, otherwise the bet is open to anyone. Status flow: `open → accepted → resolved`, or `open → cancelled`.
 
 ## RPC Functions
 
-### `init_portfolio(p_user_id uuid) → portfolios`
-Called on login. Creates portfolio with 1000 credits if not exists. Sets `display_name` from email prefix. Idempotent.
+### Public (any authenticated user)
 
-### `execute_trade(p_user_id uuid, p_stock_id uuid, p_type text, p_quantity int) → trades`
-Atomic buy/sell/short/cover. Buy/sell: updates holdings, exec-first price impact. **short**: locks 2× collateral, opens `short_positions`, moves price down. **cover**: closes short, returns `collateral + P/L` (floored at 0), moves price up. Liquidates shorts when price ≥ 1.5× entry after buy/cover. Same cooldown and daily volume limits as spot trades.
+- `init_profile(p_user_id) → profiles` — idempotent. Inserts row with `tokens = 0`, `paid_in = false`, `display_name = email_prefix`. Called on every login.
+- `apply_boost(p_match_id, p_applied) → match_predictions` — toggles `boost_applied`. Caps 3 per stage, rejects after kickoff. See **Scoring System** above.
+- `propose_side_bet(p_match_id, p_template_id, p_custom_label, p_description, p_proposer_side, p_proposer_stake, p_opponent_side, p_opponent_stake, p_invited_user_id) → side_bets`
+  - Verifies kickoff is in the future, sides differ, stakes are positive, proposer has tokens.
+  - Atomically deducts proposer's stake.
+- `accept_side_bet(p_bet_id) → side_bets`
+  - Verifies bet is open, kickoff still in the future, opponent isn't the proposer, opponent has tokens, and (if `invited_user_id` is set) that the caller is the invited player.
+  - Atomically deducts opponent's stake; sets `opponent_id`, `opponent_name`, `accepted_at`.
+- `cancel_side_bet(p_bet_id) → side_bets`
+  - Proposer-only (admin can also cancel). Refunds the proposer's stake. Status must be `open`.
 
-### `admin_adjust_price(p_stock_id uuid, p_percentage numeric) → stocks`
-Admin only (checks `auth.uid()` against hardcoded admin UUID). Adjusts price by given percentage. Used by admin panel buttons (±5%, ±10%, ±20%, ±50%, ±100%).
+### Admin only (`is_admin()` check)
 
-### `generate_fake_trades() → void`
-Picks 3-5 random stocks, creates fake buy/sell trades (qty 1-5) with bot names (MarketMaker, AlgoBot, WallStBets, etc.). Moves prices 0.1-0.4% per unit. Can be triggered from admin panel "Generate Market Noise" button.
-
-### `generate_micro_trades() → void`
-Picks 5-10 random stocks, creates single-unit fake trades with smaller impact (0.05-0.2%). Bot names: FloorTrader, ScalpKing, NanoTrader, etc.
-
-### `publish_due_news_items() → void`
-Sets `published = true` on every row where `published = false` and `published_at <= now()`, ordered by `published_at`. Applies `impacts` to `stocks` / `price_history` when `impacts_already_applied` is false, then sets that flag true. Invoked from the frontend on an interval and safe to call repeatedly.
-
-Legacy `publish_next_news()` (random pick) conflicts with scheduled publishing; unschedule `news-publisher` if you use `publish_due_news_items` and `reset_news_schedule.sql`.
-
-## Cron Jobs (pg_cron)
-
-**Active:** (varies by project; confirm in SQL) If `news-publisher` calls `publish_next_news`, remove it when using `publish_due_news_items`.
-
-**Disabled** (fake trades). To re-enable:
-
-```sql
--- Every 2 minutes: larger fake trades
-SELECT cron.schedule('fake-trades-every-2min', '*/2 * * * *', 'SELECT generate_fake_trades()');
-
--- Every 1 minute: micro trades for continuous activity
-SELECT cron.schedule('micro-trades-every-min', '* * * * *', 'SELECT generate_micro_trades()');
-```
-
-To disable:
-```sql
-SELECT cron.unschedule('fake-trades-every-2min');
-SELECT cron.unschedule('micro-trades-every-min');
-```
-
-To check active jobs:
-```sql
-SELECT * FROM cron.job;
-```
+- `admin_topup_tokens(user_id, amount) → profiles` — adds tokens after irl payment.
+- `admin_set_paid_in(user_id, bool) → profiles` — flips €15 paid status.
+- `admin_set_main_winner(user_id) → app_state` — sets the tournament winner; banner flips to "Winnaar".
+- `admin_set_prediction_points(user_id, int) → profiles` — manual override (mostly obsolete — use `score_predictions()`).
+- `admin_set_tournament_result(p_type, p_team_id, p_string, p_number, p_bool) → tournament_results` — upsert one row in `tournament_results`. Pass `null` for the value kinds you don't need.
+- `admin_clear_tournament_result(p_type)` — removes a single result row.
+- `admin_lock_predictions(p_locked) → app_state` — flips the global lock. When locked: all writes to `match_predictions` / `tournament_predictions` and the `apply_boost` RPC are blocked, and the SELECT policies on those tables open up so every player can read every other player's predictions.
+- `score_predictions() → table(user_id, total)` — recomputes everyone's `prediction_points` from `match_predictions` + `tournament_predictions` against the live `matches` and `tournament_results`. Idempotent.
+- `resolve_side_bet(bet_id, outcome) → side_bets` — outcome ∈ `proposer | opponent | push`. Pays out the pot. Status must be `accepted`.
 
 ## Realtime
 
-Supabase Realtime is enabled on these tables (via `supabase_realtime` publication):
-- `stocks` — price updates push to all clients
-- `trades` — new trades appear in ticker/feed
-- `messages` — chat messages broadcast instantly
-- `news_items` — when a news item is published (UPDATE with published=true), all clients get a snackbar + sound notification
-- `short_positions` — add to publication after migration (see `short_positions` section above)
+The following tables are added to `supabase_realtime` publication by `worldcup_schema.sql`:
 
-Frontend subscribes in `App.tsx` (stocks, trades, short_positions, etc.) and `ChatBox.tsx` (messages channel).
+- `profiles` — token balance, prediction points, paid-in flag, display name
+- `matches` — live score updates (when ingestion lands)
+- `side_bets` — propose / accept / cancel / resolve all push live
+- `app_state` — banner reacts to `main_winner_user_id` flips and `buyin_eur` changes
+- `tournament_results` — admin-set outcomes flow back into the predictions UI in real time
+
+Frontend subscribes in `App.tsx` and refetches the view via `setRefreshKey` when needed.
 
 ## RLS Policies
 
 | Table | Policy | Rule |
 |-------|--------|------|
-| stocks, holdings, portfolios, price_history, trades, short_positions | `anon_read_*` | SELECT for everyone |
-| stocks, holdings, portfolios, price_history, trades, short_positions | `auth_all_*` | ALL for authenticated users |
-| messages | `Anyone can read messages` | SELECT for everyone |
-| messages | `Auth users can insert` | INSERT where `auth.uid() = user_id` |
+| profiles, teams, matches, side_bet_templates, side_bets, app_state, tournament_results | `read all` | SELECT for everyone |
+| profiles | `self update` | UPDATE only when `auth.uid() = user_id` |
+| group_predictions | `self write` | ALL only for own rows |
+| match_predictions, tournament_predictions | `read locked or own` (SELECT) | Anyone can read once `predictions_are_locked()` returns true; otherwise only own rows |
+| match_predictions, tournament_predictions | `self insert/update/delete pre lock` | Writes only when `auth.uid() = user_id` AND `predictions_are_locked() = false` |
+| side_bets | (no direct INSERT/UPDATE policy) | All writes go through SECURITY DEFINER RPCs that enforce stake/tokens rules |
+
+## Apply schema and seed (one time, manual)
+
+The Supabase password is not committed; you need it locally. Drop the postgres connection string from Supabase → Settings → Database into `.env`:
+
+```
+DATABASE_URL=postgresql://postgres:<password>@db.adeactqablfksthhkbay.supabase.co:5432/postgres
+VITE_SUPABASE_URL=https://adeactqablfksthhkbay.supabase.co
+VITE_SUPABASE_ANON_KEY=<anon key>
+```
+
+Then:
+
+```bash
+npm run apply-schema     # runs supabase/worldcup_schema.sql
+npm run apply-scoring    # runs supabase/scoring.sql (boost column, tournament_results, scoring RPCs)
+npm run apply-lock       # runs supabase/lock-predictions.sql (global lock + tightened RLS)
+npm run seed-worldcup    # fetches openfootball 2026 JSON and upserts teams + matches + side-bet templates
+```
+
+All scripts are idempotent — safe to re-run.
 
 ## Environment Variables
 
 ```
-VITE_SUPABASE_URL=https://inxcedeyqqbusetvmpxz.supabase.co
+VITE_SUPABASE_URL=https://adeactqablfksthhkbay.supabase.co
 VITE_SUPABASE_ANON_KEY=<anon key in .env>
+DATABASE_URL=<postgres URL from Supabase → Settings → Database>
 ```
-
-## Seeded Stocks (20)
-
-The stocks were seeded via `scripts/migrate.mjs` (deleted after use). They include LAN party / gaming themed stocks related to the group members (AnneDrank, Slorv, Danordaan, Davy, NathanJewish, Graftak, Bryce, Ewald) and games (Warcraft, Trackmania, Age of Empires).
 
 ## Key Frontend Files
 
 | File | Purpose |
 |------|---------|
 | `src/lib/supabase.ts` | Supabase client init |
-| `src/lib/constants.ts` | `ADMIN_USER_ID`, `USERNAME_DOMAIN` |
-| `src/lib/database.types.ts` | TypeScript interfaces for all tables |
-| `src/lib/portfolio.ts` | `computePortfolioValue()` helper |
-| `src/App.tsx` | Main app: auth, data loading, Realtime subscriptions, routing |
-| `src/components/LoginScreen.tsx` | Magic link auth |
-| `src/components/DisplayNameForm.tsx` | First-login display name picker |
-| `src/components/Header.tsx` | Nav bar with Market/Trade Log tabs, admin toggle |
-| `src/components/StockCard.tsx` | Stock tile with sparkline |
-| `src/components/StockDetail.tsx` | Modal: chart (lightweight-charts), trade panel, trade feed |
-| `src/components/Portfolio.tsx` | Sidebar: holdings and short positions |
-| `src/components/Leaderboard.tsx` | Sidebar: ranked users, expandable portfolios |
-| `src/components/AdminPanel.tsx` | Price adjustment buttons, generate noise |
-| `src/components/TradeLog.tsx` | Filterable/sortable trade history table |
-| `src/components/TradeTicker.tsx` | Toast notifications for new trades |
-| `src/components/MarqueeTicker.tsx` | Scrolling stock ticker bar |
-| `src/components/ChatBox.tsx` | Floating real-time chat |
-| `src/components/NewsFeed.tsx` | News page: published items with images, sentiment badges |
-| `src/components/NewsSnackbar.tsx` | Breaking news toast notification on new publish |
+| `src/lib/constants.ts` | `ADMIN_USER_ID`, `BUYIN_EUR`, `GROUP_LETTERS` |
+| `src/lib/database.types.ts` | TypeScript interfaces for every table |
+| `src/lib/i18n.ts` | Dutch copy + `fmtEur` / `fmtTokens` / `fmtKickoff` formatters |
+| `src/App.tsx` | Auth, data loading, three-page router, realtime subscriptions |
+| `src/components/LoginScreen.tsx` | Magic link login (Dutch) |
+| `src/components/DisplayNameForm.tsx` | First-login display-name picker (Dutch) |
+| `src/components/Header.tsx` | Three Dutch tabs + token + points + admin button |
+| `src/components/PrizePotBanner.tsx` | EUR pot total + current leader / winner + top 3 |
+| `src/components/PredictionsPage.tsx` | Group matches + awards + totals + drama, draft/dirty diff, sticky save |
+| `src/components/GroupMatchesSection.tsx` | One group's 6 match score inputs + live virtual standings + boost button |
+| `src/components/ScoringLegend.tsx` | Collapsible per-match / multiplier / awards / totals / drama explainer |
+| `src/components/StickySaveBar.tsx` | Fixed-bottom unsaved-changes bar |
+| `src/lib/scoring.ts` | Stage / multiplier / boost-counting helpers shared between components |
+| `src/components/SideBetsPage.tsx` | Challenges / active / upcoming / history |
+| `src/components/SideBetProposeModal.tsx` | Asymmetric-stakes propose modal |
+| `src/components/Leaderboard.tsx` | Two columns: Hoofdpoule (points) + Tokens |
+| `src/components/AllPredictionsView.tsx` | Locked-pool view: focused match card with team flags, every player's predicted score, ⚡ boost markers, earned points, and a tournament-awards panel grouped per type |
+| `src/components/AdminPanel.tsx` | Lock pool, topup tokens, mark paid, set winner, set tournament results, recompute scores, resolve bets |
+
+## What's left for later
+
+- Knockout-stage match prediction UI (the bracket only fills in once the group stage resolves; for now the same scoring rules + boost system already apply to those rows once the user can fill them).
+- Second prediction round after group stage (`round_locked` already supports it).
+- Live-score ingestion (column slots + `resolve_side_bet` + `score_predictions` already exist, no worker yet).
+- Real EUR payout to winner (manual: pay irl, then call `admin_set_main_winner`).

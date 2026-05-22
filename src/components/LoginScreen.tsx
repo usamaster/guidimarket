@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { t } from '../lib/i18n'
 
 interface LoginScreenProps {
   onLoggedIn: () => void
@@ -38,8 +39,8 @@ export function LoginScreen({ onLoggedIn: _ }: LoginScreenProps) {
   return (
     <div className="min-h-screen bg-bg flex items-center justify-center p-4">
       <form onSubmit={handleSubmit} className="w-full max-w-xs">
-        <h1 className="text-xl font-bold text-dark text-center mb-1">Sign in</h1>
-        <p className="text-text-muted text-sm text-center mb-6">We'll email you a magic link to sign in instantly</p>
+        <h1 className="text-xl font-bold text-dark text-center mb-1">{t.auth.signIn}</h1>
+        <p className="text-text-muted text-sm text-center mb-6">{t.auth.magicLinkHint}</p>
 
         {error && (
           <div className="bg-no-light text-no text-sm px-4 py-2.5 rounded-lg mb-4 text-center">
@@ -49,7 +50,7 @@ export function LoginScreen({ onLoggedIn: _ }: LoginScreenProps) {
 
         {sent ? (
           <div className="bg-yes-light text-yes text-sm px-4 py-3 rounded-lg text-center">
-            Check your inbox! We sent a login link to <span className="font-semibold">{email}</span>
+            {t.auth.checkInbox} <span className="font-semibold">{email}</span>
           </div>
         ) : (
           <>
@@ -57,7 +58,7 @@ export function LoginScreen({ onLoggedIn: _ }: LoginScreenProps) {
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              placeholder="your@email.com"
+              placeholder={t.auth.yourEmail}
               autoComplete="email"
               className="w-full border border-border rounded-lg px-3 py-2.5 text-sm text-dark placeholder:text-text-muted focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary transition-colors bg-surface mb-5"
               autoFocus
@@ -67,7 +68,7 @@ export function LoginScreen({ onLoggedIn: _ }: LoginScreenProps) {
               disabled={loading}
               className="w-full bg-primary hover:bg-primary-hover disabled:opacity-50 text-white font-semibold py-2.5 rounded-full transition-colors cursor-pointer text-sm"
             >
-              {loading ? 'Sending...' : 'Send magic link'}
+              {loading ? t.auth.sending : t.auth.sendMagicLink}
             </button>
           </>
         )}

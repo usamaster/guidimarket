@@ -1,117 +1,95 @@
-import { useState } from 'react'
-import type { Holding, ShortPosition, Stock } from '../lib/database.types'
-
-interface LeaderEntry {
-  username: string
-  totalValue: number
-  credits: number
-  holdings: Holding[]
-  shortPositions: ShortPosition[]
-}
+import type { Profile } from '../lib/database.types'
+import { t, fmtTokens } from '../lib/i18n'
 
 interface LeaderboardProps {
-  entries: LeaderEntry[]
-  stocks: Stock[]
-  onStockClick: (stockId: string) => void
+  profiles: Profile[]
+  currentUserId: string
 }
 
-export function Leaderboard({ entries, stocks, onStockClick }: LeaderboardProps) {
-  const sorted = [...entries].sort((a, b) => b.totalValue - a.totalValue)
-  const [expanded, setExpanded] = useState<string | null>(null)
+interface ColumnProps {
+  title: string
+  hint: string
+  rows: Profile[]
+  metric: 'points' | 'tokens'
+  metricLabel: string
+  currentUserId: string
+  showPaidBadge?: boolean
+}
 
+function Column({ title, hint, rows, metric, metricLabel, currentUserId, showPaidBadge }: ColumnProps) {
   return (
-    <div className="bg-surface rounded-xl border border-border p-4">
-      <h3 className="text-sm font-semibold text-dark mb-3">Leaderboard</h3>
-      <div className="space-y-1">
-        {sorted.map((e, i) => {
-          const isOpen = expanded === e.username
-          return (
-            <div key={e.username}>
-              <div
-                onClick={() => setExpanded(isOpen ? null : e.username)}
-                className="flex items-center justify-between cursor-pointer hover:bg-bg rounded-lg px-2 py-1.5 -mx-2 transition-colors"
+    <div className="bg-card border border-border rounded-xl overflow-hidden flex-1">
+      <div className="px-4 py-3 border-b border-border">
+        <h2 className="text-sm font-bold text-dark">{title}</h2>
+        <p className="text-[11px] text-text-muted mt-0.5">{hint}</p>
+      </div>
+      {rows.length === 0 ? (
+        <p className="px-4 py-6 text-xs text-text-muted text-center">—</p>
+      ) : (
+        <ol>
+          {rows.map((p, i) => {
+            const value = metric === 'points' ? p.prediction_points : Number(p.tokens)
+            const isMe = p.user_id === currentUserId
+            return (
+              <li
+                key={p.user_id}
+                className={`flex items-center gap-3 px-4 py-3 border-b border-border last:border-b-0 ${isMe ? 'bg-primary/5' : ''}`}
               >
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs w-4 text-center font-bold ${i === 0 ? 'text-primary' : 'text-text-muted'}`}>{i + 1}</span>
-                  <div className="w-6 h-6 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center">
-                    {e.username[0]?.toUpperCase()}
-                  </div>
-                  <span className="text-xs font-medium text-dark">{e.username}</span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-semibold text-dark">{e.totalValue.toFixed(0)}</span>
-                  <svg className={`w-3 h-3 text-text-muted transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </div>
-              </div>
-
-              {isOpen && (
-                <div className="ml-8 mr-1 mt-1 mb-2 bg-bg rounded-lg p-2.5 space-y-1.5">
-                  <div className="flex items-center justify-between text-[10px] text-text-muted mb-1">
-                    <span>Cash: {e.credits.toFixed(0)}</span>
-                    <span>Positions: {(e.totalValue - e.credits).toFixed(0)}</span>
-                  </div>
-                  {e.holdings.length === 0 && e.shortPositions.length === 0 ? (
-                    <p className="text-[10px] text-text-muted">No positions yet</p>
-                  ) : (
-                    <>
-                      {e.holdings.map(h => {
-                        const stock = stocks.find(s => s.id === h.stock_id)
-                        if (!stock) return null
-                        const value = stock.current_price * h.quantity
-                        const pnl = (stock.current_price - h.avg_buy_price) * h.quantity
-                        const up = pnl >= 0
-                        return (
-                          <div
-                            key={h.id}
-                            onClick={(ev) => { ev.stopPropagation(); onStockClick(stock.id) }}
-                            className="flex items-center justify-between cursor-pointer hover:bg-surface rounded px-1.5 py-1 -mx-1.5 transition-colors"
-                          >
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs">{stock.emoji}</span>
-                              <span className="text-[11px] font-semibold text-dark">{h.quantity}x {stock.ticker}</span>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-[11px] font-semibold text-dark">{value.toFixed(0)}</span>
-                              <span className={`text-[10px] ml-1 ${up ? 'text-yes' : 'text-no'}`}>
-                                {up ? '+' : ''}{pnl.toFixed(0)}
-                              </span>
-                            </div>
-                          </div>
-                        )
-                      })}
-                      {e.shortPositions.map(sp => {
-                        const stock = stocks.find(s => s.id === sp.stock_id)
-                        if (!stock) return null
-                        const unrealized = (Number(sp.entry_price) - Number(stock.current_price)) * sp.quantity
-                        const up = unrealized >= 0
-                        return (
-                          <div
-                            key={sp.id}
-                            onClick={(ev) => { ev.stopPropagation(); onStockClick(stock.id) }}
-                            className="flex items-center justify-between cursor-pointer hover:bg-surface rounded px-1.5 py-1 -mx-1.5 transition-colors"
-                          >
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-xs">{stock.emoji}</span>
-                              <span className="text-[11px] font-semibold text-dark">-{sp.quantity}x {stock.ticker} short</span>
-                            </div>
-                            <div className="text-right">
-                              <span className="text-[11px] font-semibold text-dark">{Number(sp.collateral).toFixed(0)}</span>
-                              <span className={`text-[10px] ml-1 ${up ? 'text-yes' : 'text-no'}`}>
-                                {up ? '+' : ''}{unrealized.toFixed(0)}
-                              </span>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </>
+                <span className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-bold ${
+                  i === 0 ? 'bg-primary text-white' : i < 3 ? 'bg-primary/15 text-primary' : 'bg-bg text-text-secondary'
+                }`}>
+                  {i + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-dark truncate">
+                    {p.display_name || '—'}
+                    {isMe && <span className="ml-1.5 text-[10px] uppercase font-bold text-primary">{t.leaderboard.youTag}</span>}
+                  </p>
+                  {showPaidBadge && (
+                    <p className={`text-[10px] mt-0.5 font-semibold ${p.paid_in ? 'text-yes' : 'text-no'}`}>
+                      {p.paid_in ? t.leaderboard.paid : t.leaderboard.notPaid}
+                    </p>
                   )}
                 </div>
-              )}
-            </div>
-          )
-        })}
+                <span className="text-sm font-semibold text-dark shrink-0">
+                  {metric === 'tokens' ? fmtTokens(value) : value} <span className="text-[10px] text-text-muted font-normal">{metricLabel}</span>
+                </span>
+              </li>
+            )
+          })}
+        </ol>
+      )}
+    </div>
+  )
+}
+
+export function Leaderboard({ profiles, currentUserId }: LeaderboardProps) {
+  const byPoints = [...profiles].sort((a, b) => b.prediction_points - a.prediction_points || (b.paid_in ? 1 : 0) - (a.paid_in ? 1 : 0))
+  const byTokens = [...profiles].sort((a, b) => Number(b.tokens) - Number(a.tokens))
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-6 pb-24 flex flex-col gap-6">
+      <div>
+        <h1 className="text-2xl sm:text-3xl font-bold text-dark">{t.leaderboard.pageTitle}</h1>
+      </div>
+      <div className="flex flex-col lg:flex-row gap-4">
+        <Column
+          title={t.leaderboard.mainPool}
+          hint={t.leaderboard.mainPoolHint}
+          rows={byPoints}
+          metric="points"
+          metricLabel={t.nav.points}
+          currentUserId={currentUserId}
+          showPaidBadge
+        />
+        <Column
+          title={t.leaderboard.tokensCol}
+          hint={t.leaderboard.tokensColHint}
+          rows={byTokens}
+          metric="tokens"
+          metricLabel={t.nav.tokens}
+          currentUserId={currentUserId}
+        />
       </div>
     </div>
   )
