@@ -129,6 +129,14 @@ export interface TournamentResult {
   updated_at: string
 }
 
+export interface Message {
+  id: string
+  user_id: string
+  display_name: string
+  content: string
+  created_at: string
+}
+
 export interface SideBetTemplate {
   id: string
   key: string

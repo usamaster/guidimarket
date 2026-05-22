@@ -254,6 +254,15 @@ export const t = {
     lockConfirmClose: 'Weet je zeker dat je de pool wilt sluiten? Spelers kunnen niets meer wijzigen.',
     lockConfirmOpen: 'Pool weer openen voor wijzigingen?',
   },
+  chat: {
+    title: 'Groepschat',
+    open: 'Open chat',
+    close: 'Sluiten',
+    placeholder: 'Typ een bericht…',
+    send: 'Verstuur',
+    empty: 'Nog geen berichten. Zeg hoi!',
+    you: 'jij',
+  },
   common: {
     you: 'jij',
     loading: 'Laden…',

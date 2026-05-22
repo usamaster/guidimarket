@@ -209,6 +209,7 @@ The following tables are added to `supabase_realtime` publication by `worldcup_s
 - `side_bets` — propose / accept / cancel / resolve all push live
 - `app_state` — banner reacts to `main_winner_user_id` flips and `buyin_eur` changes
 - `tournament_results` — admin-set outcomes flow back into the predictions UI in real time
+- `messages` — group chat sidebox
 
 Frontend subscribes in `App.tsx` and refetches the view via `setRefreshKey` when needed.
 
@@ -239,6 +240,7 @@ Then:
 npm run apply-schema     # runs supabase/worldcup_schema.sql
 npm run apply-scoring    # runs supabase/scoring.sql (boost column, tournament_results, scoring RPCs)
 npm run apply-lock       # runs supabase/lock-predictions.sql (global lock + tightened RLS)
+npm run apply-chat       # runs supabase/chat.sql (group chat messages table + realtime)
 npm run seed-worldcup    # fetches openfootball 2026 JSON and upserts teams + matches + side-bet templates
 ```
 
@@ -274,6 +276,7 @@ DATABASE_URL=<postgres URL from Supabase → Settings → Database>
 | `src/components/SideBetProposeModal.tsx` | Asymmetric-stakes propose modal |
 | `src/components/Leaderboard.tsx` | Two columns: Hoofdpoule (points) + Tokens |
 | `src/components/AllPredictionsView.tsx` | Locked-pool view: focused match card with team flags, every player's predicted score, ⚡ boost markers, earned points, and a tournament-awards panel grouped per type |
+| `src/components/ChatBox.tsx` | Floating bottom-right chat sidebox with realtime messages and unread badge |
 | `src/components/AdminPanel.tsx` | Lock pool, topup tokens, mark paid, set winner, set tournament results, recompute scores, resolve bets |
 
 ## What's left for later
