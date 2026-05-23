@@ -49,6 +49,10 @@ const EMPTY_DATA: AppData = {
   sideBets: [],
 }
 
+function logErr(label: string, err: unknown) {
+  if (err) console.error(`[loadAllData] ${label} failed`, err)
+}
+
 async function loadAllData(userId: string): Promise<AppData> {
   const baseRes = await Promise.all([
     supabase.rpc('init_profile', { p_user_id: userId }),
@@ -61,15 +65,32 @@ async function loadAllData(userId: string): Promise<AppData> {
     supabase.from('side_bets').select('*').order('created_at', { ascending: false }).limit(200),
   ])
   const [profileRes, profilesRes, appStateRes, teamsRes, matchesRes, templatesRes, trRes, sbRes] = baseRes
+  logErr('init_profile', profileRes.error)
+  logErr('profiles', profilesRes.error)
+  logErr('app_state', appStateRes.error)
+  logErr('teams', teamsRes.error)
+  logErr('matches', matchesRes.error)
+  logErr('templates', templatesRes.error)
+  logErr('tournament_results', trRes.error)
+  logErr('side_bets', sbRes.error)
+
   const appState = (appStateRes.data as AppState | null) ?? null
   const locked = appState?.predictions_locked ?? false
 
-  const tpQuery = supabase.from('tournament_predictions').select('*')
-  const mpQuery = supabase.from('match_predictions').select('*')
+  const tpBase = supabase.from('tournament_predictions').select('*')
+  const mpBase = supabase.from('match_predictions').select('*')
   const [tpRes, mpRes] = await Promise.all([
-    locked ? tpQuery : tpQuery.eq('user_id', userId),
-    locked ? mpQuery : mpQuery.eq('user_id', userId),
+    locked ? tpBase : tpBase.eq('user_id', userId),
+    locked ? mpBase : mpBase.eq('user_id', userId),
   ])
+  logErr('tournament_predictions', tpRes.error)
+  logErr('match_predictions', mpRes.error)
+
+  const matchPredictions = (mpRes.data as MatchPrediction[]) ?? []
+  const tournamentPredictions = (tpRes.data as TournamentPrediction[]) ?? []
+  console.info(
+    `[loadAllData] user=${userId} locked=${locked} match_preds=${matchPredictions.length} tournament_preds=${tournamentPredictions.length}`,
+  )
 
   return {
     profile: (profileRes.data as Profile | null) ?? null,
@@ -78,8 +99,8 @@ async function loadAllData(userId: string): Promise<AppData> {
     teams: (teamsRes.data as Team[]) ?? [],
     matches: (matchesRes.data as Match[]) ?? [],
     templates: (templatesRes.data as SideBetTemplate[]) ?? [],
-    tournamentPredictions: (tpRes.data as TournamentPrediction[]) ?? [],
-    matchPredictions: (mpRes.data as MatchPrediction[]) ?? [],
+    tournamentPredictions,
+    matchPredictions,
     tournamentResults: (trRes.data as TournamentResult[]) ?? [],
     sideBets: (sbRes.data as SideBet[]) ?? [],
   }
@@ -238,6 +259,15 @@ function App() {
 
   const handleLogout = () => { supabase.auth.signOut() }
   const handleRefresh = () => setRefreshKey(k => k + 1)
+  const handleManualRefresh = async () => {
+    try {
+      const { error } = await supabase.auth.refreshSession()
+      if (error) console.warn('[refresh] auth refresh failed', error)
+    } catch (e) {
+      console.warn('[refresh] auth refresh threw', e)
+    }
+    setRefreshKey(k => k + 1)
+  }
 
   if (authLoading) {
     return (
@@ -279,6 +309,7 @@ function App() {
         onPageChange={p => { setPage(p); setShowAdmin(false) }}
         onToggleAdmin={() => setShowAdmin(s => !s)}
         onLogout={handleLogout}
+        onRefresh={handleManualRefresh}
       />
 
       <main className="flex-1 pb-12 sm:pb-0">

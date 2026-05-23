@@ -13,16 +13,21 @@ function fmtTime(iso: string): string {
   return new Intl.DateTimeFormat('nl-NL', { hour: '2-digit', minute: '2-digit' }).format(d)
 }
 
+function defaultCollapsed(): boolean {
+  if (typeof window === 'undefined') return false
+  return window.innerWidth < 640
+}
+
 export function ChatBox({ userId, displayName }: ChatBoxProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [sending, setSending] = useState(false)
-  const [collapsedMobile, setCollapsedMobile] = useState(true)
+  const [collapsed, setCollapsed] = useState(defaultCollapsed)
   const [unread, setUnread] = useState(0)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const collapsedRef = useRef(collapsedMobile)
+  const collapsedRef = useRef(collapsed)
 
-  useEffect(() => { collapsedRef.current = collapsedMobile }, [collapsedMobile])
+  useEffect(() => { collapsedRef.current = collapsed }, [collapsed])
 
   useEffect(() => {
     supabase
@@ -42,7 +47,7 @@ export function ChatBox({ userId, displayName }: ChatBoxProps) {
           if (prev.some(m => m.id === msg.id)) return prev
           return [...prev, msg].slice(-200)
         })
-        if (collapsedRef.current && msg.user_id !== userId && window.innerWidth < 640) {
+        if (collapsedRef.current && msg.user_id !== userId) {
           setUnread(u => u + 1)
         }
       })
@@ -52,8 +57,8 @@ export function ChatBox({ userId, displayName }: ChatBoxProps) {
   }, [userId])
 
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, collapsedMobile])
+    if (!collapsed) bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, collapsed])
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -70,9 +75,8 @@ export function ChatBox({ userId, displayName }: ChatBoxProps) {
     setSending(false)
   }
 
-  const toggleMobile = () => {
-    if (typeof window !== 'undefined' && window.innerWidth >= 640) return
-    setCollapsedMobile(c => {
+  const toggle = () => {
+    setCollapsed(c => {
       const next = !c
       if (!next) setUnread(0)
       return next
@@ -83,20 +87,19 @@ export function ChatBox({ userId, displayName }: ChatBoxProps) {
     <div
       className={`fixed z-30 bg-card border border-border rounded-2xl shadow-2xl flex flex-col overflow-hidden transition-[height]
         right-4 sm:right-5
-        bottom-16 sm:bottom-5
+        bottom-32 sm:bottom-5
         w-[calc(100%-2rem)] sm:w-[340px]
-        sm:h-[420px]
-        ${collapsedMobile ? 'h-11' : 'h-[260px]'}`}
+        ${collapsed ? 'h-11' : 'h-[260px] sm:h-[420px]'}`}
     >
       <button
         type="button"
-        onClick={toggleMobile}
-        className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-bg/40 shrink-0 cursor-pointer sm:cursor-default text-left w-full"
+        onClick={toggle}
+        className="flex items-center justify-between px-4 py-2.5 border-b border-border bg-bg/40 shrink-0 cursor-pointer text-left w-full"
       >
         <span className="flex items-center gap-2">
           <h3 className="text-sm font-bold text-dark">{t.chat.title}</h3>
-          {collapsedMobile && unread > 0 && (
-            <span className="sm:hidden inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-no text-white text-[10px] font-bold">
+          {collapsed && unread > 0 && (
+            <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-no text-white text-[10px] font-bold">
               {unread > 99 ? '99+' : unread}
             </span>
           )}
@@ -106,11 +109,11 @@ export function ChatBox({ userId, displayName }: ChatBoxProps) {
             <span className="w-1.5 h-1.5 rounded-full bg-yes animate-pulse" />
             live
           </span>
-          <span className={`sm:hidden text-text-muted text-xs transition-transform ${collapsedMobile ? '' : 'rotate-180'}`}>▼</span>
+          <span className={`text-text-muted text-xs transition-transform ${collapsed ? '' : 'rotate-180'}`}>▼</span>
         </span>
       </button>
 
-      <div className={`flex-1 overflow-y-auto px-3 py-3 space-y-2 min-h-0 ${collapsedMobile ? 'hidden sm:block' : 'block'}`}>
+      <div className={`flex-1 overflow-y-auto px-3 py-3 space-y-2 min-h-0 ${collapsed ? 'hidden' : 'block'}`}>
         {messages.length === 0 && (
           <p className="text-xs text-text-muted text-center mt-8">{t.chat.empty}</p>
         )}
@@ -139,7 +142,7 @@ export function ChatBox({ userId, displayName }: ChatBoxProps) {
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={handleSend} className={`gap-1.5 p-2 border-t border-border bg-bg/40 shrink-0 ${collapsedMobile ? 'hidden sm:flex' : 'flex'}`}>
+      <form onSubmit={handleSend} className={`gap-1.5 p-2 border-t border-border bg-bg/40 shrink-0 ${collapsed ? 'hidden' : 'flex'}`}>
         <input
           type="text"
           value={input}

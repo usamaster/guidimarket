@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { t, fmtKickoff } from '../lib/i18n'
 import type { Match, MatchPrediction, Profile, Team, TournamentPrediction, TournamentResult } from '../lib/database.types'
+import { Flag } from './Flag'
 
 interface AllPredictionsViewProps {
   currentUserId: string
@@ -212,7 +213,9 @@ export function AllPredictionsView({
 
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-3 sm:gap-6">
             <div className="flex flex-col items-center text-center gap-2">
-              <span className="text-5xl sm:text-6xl leading-none">{team1?.flag_emoji || '🏳️'}</span>
+              {team1?.flag_emoji
+                ? <Flag emoji={team1.flag_emoji} className="w-14 h-14 sm:w-20 sm:h-20" />
+                : <span className="text-5xl sm:text-6xl leading-none">🏳️</span>}
               <span className="text-sm sm:text-base font-bold text-dark">
                 {team1?.name || focusMatch.team1_placeholder || '—'}
               </span>
@@ -232,7 +235,9 @@ export function AllPredictionsView({
               )}
             </div>
             <div className="flex flex-col items-center text-center gap-2">
-              <span className="text-5xl sm:text-6xl leading-none">{team2?.flag_emoji || '🏳️'}</span>
+              {team2?.flag_emoji
+                ? <Flag emoji={team2.flag_emoji} className="w-14 h-14 sm:w-20 sm:h-20" />
+                : <span className="text-5xl sm:text-6xl leading-none">🏳️</span>}
               <span className="text-sm sm:text-base font-bold text-dark">
                 {team2?.name || focusMatch.team2_placeholder || '—'}
               </span>
@@ -298,11 +303,15 @@ export function AllPredictionsView({
                 {has && (
                   <div className="flex items-center gap-2 shrink-0">
                     <div className="flex items-center gap-1.5 text-base sm:text-lg font-bold tabular-nums">
-                      <span>{team1?.flag_emoji || '🏳️'}</span>
+                      {team1?.flag_emoji
+                        ? <Flag emoji={team1.flag_emoji} className="inline-block w-4 h-4 sm:w-5 sm:h-5" />
+                        : <span>🏳️</span>}
                       <span className="text-dark">{pred!.team1_score}</span>
                       <span className="text-text-muted text-sm">-</span>
                       <span className="text-dark">{pred!.team2_score}</span>
-                      <span>{team2?.flag_emoji || '🏳️'}</span>
+                      {team2?.flag_emoji
+                        ? <Flag emoji={team2.flag_emoji} className="inline-block w-4 h-4 sm:w-5 sm:h-5" />
+                        : <span>🏳️</span>}
                     </div>
                     {boosted && (
                       <span className="text-[10px] uppercase tracking-wider font-bold bg-primary text-white px-1.5 py-0.5 rounded-full">

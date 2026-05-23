@@ -26,6 +26,8 @@ export const t = {
     logout: 'Uitloggen',
     tokens: 'tokens',
     points: 'pt',
+    refresh: 'Vernieuwen',
+    refreshing: 'Vernieuwen…',
   },
   prizepot: {
     title: 'Prijzenpot',
@@ -38,7 +40,9 @@ export const t = {
     paid: 'Betaald',
     nobodyPaid: 'Nog niemand heeft ingelegd',
     perPlayer: 'per speler',
-    nobodyPredicting: 'Nog geen voorspellingen ingediend',
+    tournamentNotStarted: 'Toernooi nog niet begonnen',
+    noPointsYet: 'Nog geen punten gescoord — wacht op de eerste wedstrijd',
+    noPlayersYet: 'Nog geen spelers',
   },
   predictions: {
     pageTitle: 'Mijn Voorspellingen',

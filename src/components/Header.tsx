@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { toggleTheme } from '../lib/theme'
 import { t, fmtTokens } from '../lib/i18n'
 import { APP_NAME } from '../lib/constants'
@@ -14,9 +15,20 @@ interface HeaderProps {
   onPageChange: (page: Page) => void
   onToggleAdmin: () => void
   onLogout: () => void
+  onRefresh: () => Promise<void> | void
 }
 
-export function Header({ tokens, predictionPoints, username, isAdmin, showAdmin, page, onPageChange, onToggleAdmin, onLogout }: HeaderProps) {
+export function Header({ tokens, predictionPoints, username, isAdmin, showAdmin, page, onPageChange, onToggleAdmin, onLogout, onRefresh }: HeaderProps) {
+  const [refreshing, setRefreshing] = useState(false)
+  const handleRefreshClick = async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await onRefresh()
+    } finally {
+      setRefreshing(false)
+    }
+  }
   const navItems: ReadonlyArray<readonly [Page, string, string]> = [
     ['predictions', '🎯', t.nav.predictions],
     ['sidebets', '🎲', t.nav.sidebets],
@@ -60,6 +72,25 @@ export function Header({ tokens, predictionPoints, username, isAdmin, showAdmin,
             </div>
 
             <div className="h-5 w-px bg-border hidden sm:block" />
+
+            <button
+              type="button"
+              onClick={handleRefreshClick}
+              disabled={refreshing}
+              title={t.nav.refresh}
+              aria-label={t.nav.refresh}
+              className="w-9 h-9 rounded-full border border-border bg-surface flex items-center justify-center hover:bg-bg transition-colors cursor-pointer shrink-0 disabled:opacity-50"
+            >
+              <svg
+                className={`w-4 h-4 text-text-muted ${refreshing ? 'animate-spin' : ''}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+                strokeWidth={2}
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M5.07 19a9 9 0 0014.93-3M18.93 5a9 9 0 00-14.93 3" />
+              </svg>
+            </button>
 
             <button
               type="button"

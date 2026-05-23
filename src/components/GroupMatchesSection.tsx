@@ -3,6 +3,7 @@ import { t, fmtKickoff } from '../lib/i18n'
 import type { Match, MatchPrediction, Team } from '../lib/database.types'
 import type { GroupLetter } from '../lib/constants'
 import { boostStageOf, boostStageLabel, BOOSTS_PER_STAGE } from '../lib/scoring'
+import { Flag } from './Flag'
 
 export interface MatchScoreDraft {
   team1_score: number | null
@@ -128,7 +129,7 @@ function MatchRow({ match, teams, draft, prediction, boostsUsed, boostsLimit, bu
       <div className="grid grid-cols-[1fr_auto_1fr_auto] items-center gap-2">
         <div className="flex items-center gap-1.5 justify-end min-w-0">
           <span className="text-sm font-medium text-dark truncate text-right">{team1?.name || '—'}</span>
-          {team1?.flag_emoji && <span className="text-base shrink-0">{team1.flag_emoji}</span>}
+          <Flag emoji={team1?.flag_emoji} className="inline-block w-4 h-4 shrink-0 align-[-0.15em]" />
         </div>
         <div className="flex items-center gap-1">
           <input
@@ -154,7 +155,7 @@ function MatchRow({ match, teams, draft, prediction, boostsUsed, boostsLimit, bu
           />
         </div>
         <div className="flex items-center gap-1.5 min-w-0">
-          {team2?.flag_emoji && <span className="text-base shrink-0">{team2.flag_emoji}</span>}
+          <Flag emoji={team2?.flag_emoji} className="inline-block w-4 h-4 shrink-0 align-[-0.15em]" />
           <span className="text-sm font-medium text-dark truncate">{team2?.name || '—'}</span>
         </div>
         <button
@@ -262,7 +263,8 @@ export function GroupMatchesSection({
                     }`}>{i + 1}</span>
                   </td>
                   <td className="py-1.5 truncate max-w-[120px]">
-                    {s.team.flag_emoji ? `${s.team.flag_emoji} ` : ''}{s.team.name}
+                    <Flag emoji={s.team.flag_emoji} className="inline-block w-3.5 h-3.5 mr-1 align-[-0.15em]" />
+                    {s.team.name}
                   </td>
                   <td className="py-1.5 px-1 text-right tabular-nums">{s.played}</td>
                   <td className="py-1.5 px-1 text-right tabular-nums">

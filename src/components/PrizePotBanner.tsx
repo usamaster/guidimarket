@@ -41,8 +41,9 @@ export function PrizePotBanner({ profiles, appState, currentUserId }: PrizePotBa
               <p className="text-[11px] text-primary/80">{leader.prediction_points} {t.nav.points}</p>
             </div>
           ) : (
-            <div className="bg-bg border border-border rounded-lg px-3 py-2">
-              <p className="text-[11px] text-text-muted">{t.prizepot.nobodyPredicting}</p>
+            <div className="bg-bg border border-border rounded-lg px-3 py-2 max-w-[180px]">
+              <p className="text-[10px] uppercase font-bold tracking-wide text-text-muted">{t.prizepot.tournamentNotStarted}</p>
+              <p className="text-[11px] text-text-secondary mt-0.5 leading-snug">{t.prizepot.noPointsYet}</p>
             </div>
           )}
         </div>
@@ -53,7 +54,7 @@ export function PrizePotBanner({ profiles, appState, currentUserId }: PrizePotBa
       <div className="mt-4 border-t border-border pt-4">
         <p className="text-[11px] uppercase font-bold tracking-wide text-text-muted mb-2">{t.prizepot.top3}</p>
         {top3.length === 0 ? (
-          <p className="text-xs text-text-muted">{t.prizepot.nobodyPredicting}</p>
+          <p className="text-xs text-text-muted">{t.prizepot.noPlayersYet}</p>
         ) : (
           <ol className="space-y-1.5">
             {top3.map((p, i) => {
