@@ -15,6 +15,7 @@ import { GroupMatchesSection, type MatchScoreDraft } from './GroupMatchesSection
 import { PrizePotBanner } from './PrizePotBanner'
 import { StickySaveBar } from './StickySaveBar'
 import { ScoringLegend } from './ScoringLegend'
+import { TeamSelect } from './TeamSelect'
 import { countBoostsByStage } from '../lib/scoring'
 
 interface PredictionsPageProps {
@@ -372,18 +373,12 @@ export function PredictionsPage({
                   {label}
                   {renderEarnedBadge(type)}
                 </span>
-                <select
-                  value={v.team_id || ''}
-                  onChange={e => setTournament(type, { team_id: e.target.value || null })}
-                  className="bg-bg border border-border rounded-md px-2 py-2 text-sm text-dark focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary cursor-pointer"
-                >
-                  <option value="">{t.predictions.chooseTeam}</option>
-                  {sortedTeams.map(team => (
-                    <option key={team.id} value={team.id}>
-                      {team.flag_emoji ? `${team.flag_emoji} ` : ''}{team.name}
-                    </option>
-                  ))}
-                </select>
+                <TeamSelect
+                  teams={sortedTeams}
+                  value={v.team_id}
+                  onChange={teamId => setTournament(type, { team_id: teamId })}
+                  placeholder={t.predictions.chooseTeam}
+                />
               </label>
             )
           })}

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { t, fmtTokens } from '../lib/i18n'
 import type { AppState, Profile, SideBet, Team, TournamentResult } from '../lib/database.types'
+import { TeamSelect } from './TeamSelect'
 
 interface AdminPanelProps {
   profiles: Profile[]
@@ -246,12 +247,14 @@ export function AdminPanel({ profiles, appState, sideBets, teams, tournamentResu
           </select>
 
           {currentDef.kind === 'team' && (
-            <select value={resultTeamId} onChange={e => setResultTeamId(e.target.value)} className="bg-bg border border-border rounded-md px-2 py-2 text-sm">
-              <option value="">—</option>
-              {sortedTeams.map(team => (
-                <option key={team.id} value={team.id}>{team.flag_emoji ? `${team.flag_emoji} ` : ''}{team.name}</option>
-              ))}
-            </select>
+            <TeamSelect
+              teams={sortedTeams}
+              value={resultTeamId || null}
+              onChange={teamId => setResultTeamId(teamId || '')}
+              placeholder="—"
+              allowEmpty
+              emptyLabel="—"
+            />
           )}
           {currentDef.kind === 'player' && (
             <input
