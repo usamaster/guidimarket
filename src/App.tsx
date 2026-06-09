@@ -21,7 +21,6 @@ import { AllPredictionsView } from './components/AllPredictionsView'
 import { SideBetsPage } from './components/SideBetsPage'
 import { Leaderboard } from './components/Leaderboard'
 import { AdminPanel } from './components/AdminPanel'
-import { ChatBox } from './components/ChatBox'
 
 interface AppData {
   profile: Profile | null
@@ -362,8 +361,6 @@ function App() {
           <Leaderboard profiles={data.profiles} currentUserId={session.user.id} />
         )}
       </main>
-
-      <ChatBox userId={session.user.id} displayName={username} />
     </div>
   )
 }

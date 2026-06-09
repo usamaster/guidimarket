@@ -117,9 +117,20 @@ function MatchRow({ match, teams, draft, prediction, boostsUsed, boostsLimit, bu
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
-        <p className="text-[10px] uppercase tracking-wide text-text-muted">{fmtKickoff(match.kickoff_at)}</p>
+        <div className="flex items-center gap-2 min-w-0 flex-wrap">
+          <p className="text-[10px] uppercase tracking-wide text-text-muted shrink-0">{fmtKickoff(match.kickoff_at)}</p>
+          {match.ground && (
+            <span className="inline-flex items-center gap-1 text-[11px] text-text-secondary min-w-0">
+              <svg className="w-3 h-3 shrink-0 text-text-muted" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
+                <circle cx="12" cy="11" r="2.5" />
+              </svg>
+              <span className="truncate">{match.ground}</span>
+            </span>
+          )}
+        </div>
         {finished && earnedPts !== null && (
-          <span className={`text-[10px] uppercase tracking-wide font-bold px-2 py-0.5 rounded ${
+          <span className={`text-[10px] uppercase tracking-wide font-bold px-2 py-0.5 rounded shrink-0 ${
             earnedPts > 0 ? 'bg-yes-light text-yes' : 'bg-bg text-text-muted'
           }`}>
             {earnedPts} {t.nav.points} {t.predictions.earned}

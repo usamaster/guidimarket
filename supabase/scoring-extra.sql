@@ -24,6 +24,7 @@ declare
 begin
   if predicted is null or actual is null then return 0; end if;
   predicted_names := string_to_array(lower(predicted), ',');
+  predicted_names := predicted_names[1:5];
   actual_names    := string_to_array(lower(actual), ',');
   foreach pn in array predicted_names loop
     matched := false;

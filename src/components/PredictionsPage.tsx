@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { t } from '../lib/i18n'
 import { GROUP_LETTERS, type GroupLetter } from '../lib/constants'
@@ -104,6 +104,32 @@ function buildOriginal(matchPreds: MatchPrediction[], tournament: TournamentPred
   return { matches: ms, tournament: tp }
 }
 
+const DRAFT_STORAGE_VERSION = 1
+
+function draftStorageKey(userId: string) {
+  return `wk-pred-draft:${DRAFT_STORAGE_VERSION}:${userId}`
+}
+
+function readStoredDraft(userId: string): Draft | null {
+  try {
+    const raw = localStorage.getItem(draftStorageKey(userId))
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Draft
+    if (!parsed || typeof parsed !== 'object' || !parsed.matches || !parsed.tournament) return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeStoredDraft(userId: string, draft: Draft) {
+  try {
+    localStorage.setItem(draftStorageKey(userId), JSON.stringify(draft))
+  } catch {
+    return
+  }
+}
+
 function getMatch(draft: Draft, id: string): MatchScoreDraft {
   return draft.matches[id] || EMPTY_MATCH
 }
@@ -124,6 +150,24 @@ function isTournamentEqual(a: TournamentDraft, b: TournamentDraft) {
     && a.bool_value === b.bool_value
 }
 
+function mergeServerIntoDraft(server: Draft, current: Draft, prevOriginal: Draft): Draft {
+  const matches: Record<string, MatchScoreDraft> = { ...server.matches }
+  const matchIds = new Set([...Object.keys(current.matches), ...Object.keys(prevOriginal.matches)])
+  for (const id of matchIds) {
+    const cur = current.matches[id] || EMPTY_MATCH
+    const prev = prevOriginal.matches[id] || EMPTY_MATCH
+    if (!isMatchEqual(cur, prev)) matches[id] = cur
+  }
+  const tournament: Record<string, TournamentDraft> = { ...server.tournament }
+  const types = new Set([...Object.keys(current.tournament), ...Object.keys(prevOriginal.tournament)])
+  for (const type of types) {
+    const cur = current.tournament[type] || EMPTY_TOURNAMENT
+    const prev = prevOriginal.tournament[type] || EMPTY_TOURNAMENT
+    if (!isTournamentEqual(cur, prev)) tournament[type] = cur
+  }
+  return { matches, tournament }
+}
+
 export function PredictionsPage({
   userId, profiles, appState, teams, matches, tournamentPredictions, matchPredictions, onSaved, onSwitchToOthers,
 }: PredictionsPageProps) {
@@ -131,13 +175,14 @@ export function PredictionsPage({
   const myMatchPreds = useMemo(() => matchPredictions.filter(p => p.user_id === userId), [matchPredictions, userId])
   const myTournamentPreds = useMemo(() => tournamentPredictions.filter(p => p.user_id === userId), [tournamentPredictions, userId])
   const [original, setOriginal] = useState<Draft>(() => buildOriginal(myMatchPreds, myTournamentPreds))
-  const [draft, setDraft] = useState<Draft>(original)
+  const [draft, setDraft] = useState<Draft>(() => (locked ? original : readStoredDraft(userId) ?? original))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [justSaved, setJustSaved] = useState(false)
   const [boostBusyId, setBoostBusyId] = useState<string | null>(null)
   const [boostError, setBoostError] = useState<string | null>(null)
   const [now, setNow] = useState(() => Date.now())
+  const originalRef = useRef(original)
 
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30_000)
@@ -145,10 +190,17 @@ export function PredictionsPage({
   }, [])
 
   useEffect(() => {
-    const next = buildOriginal(myMatchPreds, myTournamentPreds)
-    setOriginal(next)
-    setDraft(next)
-  }, [myMatchPreds, myTournamentPreds])
+    const server = buildOriginal(myMatchPreds, myTournamentPreds)
+    const prevOriginal = originalRef.current
+    originalRef.current = server
+    setOriginal(server)
+    setDraft(cur => (locked ? server : mergeServerIntoDraft(server, cur, prevOriginal)))
+  }, [myMatchPreds, myTournamentPreds, locked])
+
+  useEffect(() => {
+    if (locked) return
+    writeStoredDraft(userId, draft)
+  }, [draft, userId, locked])
 
   const matchesByGroup = useMemo(() => {
     const map = {} as Record<GroupLetter, Match[]>
@@ -273,6 +325,7 @@ export function PredictionsPage({
         if (tErr) throw tErr
       }
 
+      originalRef.current = draft
       setOriginal(draft)
       setJustSaved(true)
       onSaved()
