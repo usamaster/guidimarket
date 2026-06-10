@@ -264,6 +264,12 @@ export function PredictionsPage({
     setError(null)
   }
 
+  const handleDiscard = () => {
+    setDraft(original)
+    setError(null)
+    setJustSaved(false)
+  }
+
   const setTournament = (type: PredictionType, patch: Partial<TournamentDraft>) => {
     setDraft(d => ({
       ...d,
@@ -529,7 +535,7 @@ export function PredictionsPage({
       </fieldset>
 
       {!locked && (
-        <StickySaveBar dirtyCount={dirtyCount} saving={saving} error={error} onSave={handleSave} />
+        <StickySaveBar dirtyCount={dirtyCount} saving={saving} error={error} onSave={handleSave} onDiscard={handleDiscard} />
       )}
     </div>
   )

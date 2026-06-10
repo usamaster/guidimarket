@@ -1,14 +1,37 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { t, fmtTokens } from '../lib/i18n'
-import type { AppState, Profile, SideBet, Team, TournamentResult } from '../lib/database.types'
+import type { AppState, Match, Profile, SideBet, Team, TournamentResult } from '../lib/database.types'
 import { TeamSelect } from './TeamSelect'
+import { AdminMatchStats } from './AdminMatchStats'
+
+interface CompletionRow {
+  user_id: string
+  display_name: string | null
+  matches_done: number
+  matches_total: number
+  tournament_done: number
+  tournament_total: number
+}
+
+function ProgressPill({ label, done, total }: { label: string; done: number; total: number }) {
+  const complete = done >= total
+  return (
+    <span className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full tabular-nums ${
+      complete ? 'bg-yes-light text-yes' : 'bg-no-light text-no'
+    }`}>
+      <span className="uppercase tracking-wide text-[9px] opacity-70">{label}</span>
+      {done}/{total}
+    </span>
+  )
+}
 
 interface AdminPanelProps {
   profiles: Profile[]
   appState: AppState | null
   sideBets: SideBet[]
   teams: Team[]
+  matches: Match[]
   tournamentResults: TournamentResult[]
   onChanged: () => void
 }
@@ -44,7 +67,8 @@ const RESULT_DEFS: ResultDef[] = [
   { type: 'hat_trick_scored', label: t.predictions.hatTrickScored, kind: 'bool' },
 ]
 
-export function AdminPanel({ profiles, appState, sideBets, teams, tournamentResults, onChanged }: AdminPanelProps) {
+export function AdminPanel({ profiles, appState, sideBets, teams, matches, tournamentResults, onChanged }: AdminPanelProps) {
+  const [view, setView] = useState<'main' | 'matchstats'>('main')
   const [topupUser, setTopupUser] = useState('')
   const [topupAmount, setTopupAmount] = useState<number>(100)
   const [paidUser, setPaidUser] = useState('')
@@ -62,6 +86,30 @@ export function AdminPanel({ profiles, appState, sideBets, teams, tournamentResu
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [completion, setCompletion] = useState<CompletionRow[]>([])
+  const [completionLoading, setCompletionLoading] = useState(true)
+  const [completionReloadKey, setCompletionReloadKey] = useState(0)
+
+  useEffect(() => {
+    let active = true
+    supabase.rpc('admin_prediction_status').then(({ data, error: e }) => {
+      if (!active) return
+      if (!e && data) setCompletion(data as CompletionRow[])
+      setCompletionLoading(false)
+    })
+    return () => { active = false }
+  }, [completionReloadKey])
+
+  const reloadCompletion = () => {
+    setCompletionLoading(true)
+    setCompletionReloadKey(k => k + 1)
+  }
+
+  const incompleteRows = useMemo(
+    () => completion.filter(r => r.matches_done < r.matches_total || r.tournament_done < r.tournament_total),
+    [completion],
+  )
+  const completeCount = completion.length - incompleteRows.length
 
   const acceptedBets = sideBets.filter(b => b.status === 'accepted')
 
@@ -82,12 +130,74 @@ export function AdminPanel({ profiles, appState, sideBets, teams, tournamentResu
     setBusy(false)
   }
 
+  if (view === 'matchstats') {
+    return (
+      <AdminMatchStats
+        matches={matches}
+        teams={teams}
+        onBack={() => setView('main')}
+        onChanged={onChanged}
+      />
+    )
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6">
       <h1 className="text-2xl font-bold text-dark">{t.admin.title}</h1>
 
       {error && <div className="bg-no-light border border-no/20 text-no rounded-lg px-3 py-2 text-sm">{error}</div>}
       {success && <div className="bg-yes-light border border-yes/20 text-yes rounded-lg px-3 py-2 text-sm">{success}</div>}
+
+      <section className="bg-card border border-border rounded-xl p-4">
+        <div className="flex items-center justify-between gap-3 mb-1">
+          <h2 className="text-sm font-bold text-dark">{t.admin.completionTitle}</h2>
+          <div className="flex items-center gap-3 shrink-0">
+            {!completionLoading && completion.length > 0 && (
+              <span className="text-[11px] text-text-muted tabular-nums">
+                {completeCount}/{completion.length} {t.admin.completionSummary}
+              </span>
+            )}
+            <button
+              onClick={reloadCompletion}
+              disabled={completionLoading}
+              className="text-xs font-medium text-primary hover:text-primary-hover disabled:opacity-50 cursor-pointer"
+            >
+              {completionLoading ? t.admin.completionLoading : t.admin.completionRefresh}
+            </button>
+          </div>
+        </div>
+        <p className="text-xs text-text-muted mb-3">{t.admin.completionHint}</p>
+        {completionLoading ? (
+          <p className="text-sm text-text-muted">{t.admin.completionLoading}</p>
+        ) : incompleteRows.length === 0 ? (
+          <p className="text-sm text-yes font-medium">{t.admin.completionAllDone}</p>
+        ) : (
+          <ul className="flex flex-col divide-y divide-border">
+            {incompleteRows.map(row => (
+              <li key={row.user_id} className="py-2.5 flex items-center justify-between gap-3">
+                <span className="text-sm font-medium text-dark truncate min-w-0">{row.display_name || '—'}</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <ProgressPill label={t.admin.completionMatches} done={row.matches_done} total={row.matches_total} />
+                  <ProgressPill label={t.admin.completionBonus} done={row.tournament_done} total={row.tournament_total} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="bg-card border border-border rounded-xl p-4 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-sm font-bold text-dark">{t.admin.matchStatsTitle}</h2>
+          <p className="text-xs text-text-muted mt-0.5">{t.admin.matchStatsHint}</p>
+        </div>
+        <button
+          onClick={() => setView('matchstats')}
+          className="bg-primary hover:bg-primary-hover text-white text-sm font-semibold px-4 py-2 rounded-full cursor-pointer shrink-0"
+        >
+          {t.admin.matchStatsButton}
+        </button>
+      </section>
 
       <section className="bg-card border border-border rounded-xl p-4">
         <h2 className="text-sm font-bold text-dark mb-3">{t.admin.topupTokens}</h2>

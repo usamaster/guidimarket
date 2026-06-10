@@ -318,6 +318,7 @@ function App() {
             appState={data.appState}
             sideBets={data.sideBets}
             teams={data.teams}
+            matches={data.matches}
             tournamentResults={data.tournamentResults}
             onChanged={handleRefresh}
           />
