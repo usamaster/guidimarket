@@ -17,6 +17,8 @@
     "apply-prediction-status": "node --env-file=.env scripts/apply-sql.mjs supabase/prediction-status.sql",
     "apply-match-results": "node --env-file=.env scripts/apply-sql.mjs supabase/match-results.sql",
     "apply-knockout": "node --env-file=.env scripts/apply-sql.mjs supabase/knockout.sql",
+    "apply-sync-scores": "node --env-file=.env scripts/apply-sql.mjs supabase/sync-scores.sql",
+    "deploy-sync-fn": "npx supabase functions deploy sync-scores --project-ref adeactqablfksthhkbay",
     "seed-worldcup": "node --env-file=.env scripts/seed-worldcup.mjs"
   },
   "dependencies": {

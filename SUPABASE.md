@@ -199,6 +199,16 @@ Knockout matches carry a progression rule in `team1_placeholder` / `team2_placeh
 
 - `admin_resolve_bracket() → integer` — manual re-run; returns the number of slots updated.
 - `admin_set_match_teams(match_id, team1_id, team2_id) → matches` — manual slot override (best-thirds, corrections). Pass `null` to clear a slot.
+- `admin_sync_match_scores(p_rows jsonb) → integer` — bulk-applies finished scores. **Only fills matches that don't already have a regular-time score**, so manually-entered results are never overwritten. Sets `status='finished'`, then calls `resolve_bracket()` + `score_predictions()`. Returns the count updated. Called by the `sync-scores` Edge Function.
+- `admin_preview_match_scores(p_rows jsonb) → table(...)` — **read-only** sanity check. Returns one row per incoming score that targets an existing, not-yet-scored match, with the current and incoming values. Writes nothing. Backs the admin "Controleer eerst" preview before applying.
+
+### Score sync (Edge Function `sync-scores`)
+
+The admin **"Uitslagen synchroniseren"** button calls `supabase.functions.invoke('sync-scores')`. The Edge Function (`supabase/functions/sync-scores/index.ts`, Deno) fetches the openfootball 2026 JSON, builds a row per match with a score (`external_id`, `ft1/ft2`, `ht`, and `et`/`pen` when present), and forwards them to `admin_sync_match_scores` **using the caller's JWT** so the `is_admin()` check still applies. One click therefore: pulls live scores → fills new results → advances the knockout bracket → recomputes everyone's points.
+
+Invoking with body `{ "dryRun": true }` runs `admin_preview_match_scores` instead and returns the diff without writing — this powers the **"Controleer eerst"** preview, which lists every match that would change (current vs incoming score) so the admin can sanity-check the openfootball data before pressing **Toepassen**.
+
+Deploy (one-time): `npm run deploy-sync-fn` (needs the Supabase CLI logged in: `npx supabase login`). The function uses the built-in `SUPABASE_URL` / `SUPABASE_ANON_KEY` env vars, so no extra secrets are required.
 
 ### Admin only (`is_admin()` check)
 
@@ -254,6 +264,8 @@ npm run apply-scoring    # runs supabase/scoring.sql (boost column, tournament_r
 npm run apply-lock       # runs supabase/lock-predictions.sql (global lock + tightened RLS)
 npm run apply-chat       # runs supabase/chat.sql (group chat messages table + realtime)
 npm run apply-knockout   # runs supabase/knockout.sql (knockout phase: advance prediction, 2× scoring, single knockout boost pool, bracket auto-advance trigger, per-match-until-kickoff RLS)
+npm run apply-sync-scores # runs supabase/sync-scores.sql (admin_sync_match_scores RPC)
+npm run deploy-sync-fn   # deploys the sync-scores Edge Function (one-time; needs npx supabase login)
 npm run seed-worldcup    # fetches openfootball 2026 JSON and upserts teams + matches + side-bet templates
 ```
 
@@ -299,6 +311,6 @@ Separate "Knockout" nav tab. Lists every knockout match grouped by round. Per ma
 ## What's left for later
 
 - Second prediction round after group stage (`round_locked` already supports it).
-- Live-score ingestion (column slots + `resolve_side_bet` + `score_predictions` already exist, no worker yet) — would also auto-fire the bracket trigger.
+- Live-score ingestion now works via the `sync-scores` Edge Function (openfootball). A scheduled cron (`pg_cron` / Supabase scheduled function) could call it automatically instead of the admin pressing the button.
 - Real EUR payout to winner (manual: pay irl, then call `admin_set_main_winner`).
 - Automatic best-third (`3…`) allocation — currently assigned by the admin via `admin_set_match_teams`.

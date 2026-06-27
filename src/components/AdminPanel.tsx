@@ -14,6 +14,16 @@ interface CompletionRow {
   tournament_total: number
 }
 
+interface SyncPreviewRow {
+  external_id: string
+  round: string
+  team1_label: string
+  team2_label: string
+  current_score: string
+  incoming_ft1: number
+  incoming_ft2: number
+}
+
 function ProgressPill({ label, done, total }: { label: string; done: number; total: number }) {
   const complete = done >= total
   return (
@@ -89,6 +99,9 @@ export function AdminPanel({ profiles, appState, sideBets, teams, matches, tourn
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
+  const [previewing, setPreviewing] = useState(false)
+  const [syncPreview, setSyncPreview] = useState<SyncPreviewRow[] | null>(null)
   const [completion, setCompletion] = useState<CompletionRow[]>([])
   const [completionLoading, setCompletionLoading] = useState(true)
   const [completionReloadKey, setCompletionReloadKey] = useState(0)
@@ -159,6 +172,33 @@ export function AdminPanel({ profiles, appState, sideBets, teams, matches, tourn
     setBusy(false)
   }
 
+  const handlePreview = async () => {
+    if (previewing || syncing) return
+    setPreviewing(true); setError(null); setSuccess(null); setSyncPreview(null)
+    const { data, error: e } = await supabase.functions.invoke('sync-scores', { body: { dryRun: true } })
+    if (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } else {
+      setSyncPreview((data as { preview?: SyncPreviewRow[] } | null)?.preview ?? [])
+    }
+    setPreviewing(false)
+  }
+
+  const handleSync = async () => {
+    if (syncing) return
+    setSyncing(true); setError(null); setSuccess(null)
+    const { data, error: e } = await supabase.functions.invoke('sync-scores')
+    if (e) {
+      setError(e instanceof Error ? e.message : String(e))
+    } else {
+      const updated = (data as { updated?: number } | null)?.updated ?? 0
+      setSuccess(updated > 0 ? `${updated} ${t.admin.syncDone}` : t.admin.syncNone)
+      setSyncPreview(null)
+      onChanged()
+    }
+    setSyncing(false)
+  }
+
   if (view === 'matchstats') {
     return (
       <AdminMatchStats
@@ -226,6 +266,77 @@ export function AdminPanel({ profiles, appState, sideBets, teams, matches, tourn
         >
           {t.admin.matchStatsButton}
         </button>
+      </section>
+
+      <section className="bg-card border border-border rounded-xl p-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-dark">{t.admin.syncTitle}</h2>
+            <p className="text-xs text-text-muted mt-0.5">{t.admin.syncHint}</p>
+          </div>
+          <button
+            onClick={handlePreview}
+            disabled={syncing || previewing}
+            className="bg-bg border border-border hover:border-primary/40 disabled:opacity-50 text-text-secondary text-sm font-semibold px-4 py-2 rounded-full cursor-pointer shrink-0"
+          >
+            {previewing ? t.admin.syncChecking : t.admin.syncPreviewButton}
+          </button>
+        </div>
+
+        {syncPreview !== null && (
+          <div className="border-t border-border pt-3 flex flex-col gap-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 className="text-xs font-bold text-dark">{t.admin.syncPreviewTitle}</h3>
+              {syncPreview.length > 0 && (
+                <span className="text-[11px] text-text-muted tabular-nums">
+                  {syncPreview.length} {t.admin.syncPreviewCount}
+                </span>
+              )}
+            </div>
+
+            {syncPreview.length === 0 ? (
+              <p className="text-sm text-text-muted">{t.admin.syncPreviewEmpty}</p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-border max-h-72 overflow-y-auto">
+                {syncPreview.map(row => (
+                  <li key={row.external_id} className="py-2 flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm text-dark truncate">
+                        {row.team1_label} <span className="text-text-muted">vs</span> {row.team2_label}
+                      </p>
+                      <p className="text-[10px] uppercase tracking-wide text-text-muted">{row.round}</p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0 text-xs">
+                      <span className="text-text-muted">
+                        {t.admin.syncCurrent}: <span className="tabular-nums">{row.current_score}</span>
+                      </span>
+                      <span className="font-bold text-yes bg-yes-light rounded px-2 py-0.5 tabular-nums">
+                        {t.admin.syncIncoming}: {row.incoming_ft1} - {row.incoming_ft2}
+                      </span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={handleSync}
+                disabled={syncing || syncPreview.length === 0}
+                className="bg-primary hover:bg-primary-hover disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-full cursor-pointer"
+              >
+                {syncing ? t.admin.syncing : t.admin.syncApply}
+              </button>
+              <button
+                onClick={() => setSyncPreview(null)}
+                disabled={syncing}
+                className="text-text-muted hover:text-dark disabled:opacity-50 text-sm font-medium px-3 py-2 cursor-pointer"
+              >
+                {t.admin.syncCancel}
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="bg-card border border-border rounded-xl p-4 flex flex-col gap-3">
