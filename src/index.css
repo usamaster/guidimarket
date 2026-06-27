@@ -55,12 +55,11 @@
 @layer base {
   html, body {
     margin: 0;
-    overflow-x: hidden;
-    overscroll-behavior-y: none;
   }
 
   body {
     @apply bg-bg text-text antialiased;
+    overflow-x: hidden;
   }
 
   html.dark {
