@@ -3,7 +3,7 @@ import { toggleTheme } from '../lib/theme'
 import { t, fmtTokens } from '../lib/i18n'
 import { APP_NAME } from '../lib/constants'
 
-export type Page = 'predictions' | 'sidebets' | 'leaderboard'
+export type Page = 'predictions' | 'knockout' | 'sidebets' | 'leaderboard'
 
 interface HeaderProps {
   tokens: number
@@ -31,6 +31,7 @@ export function Header({ tokens, predictionPoints, username, isAdmin, showAdmin,
   }
   const navItems: ReadonlyArray<readonly [Page, string, string]> = [
     ['predictions', '🎯', t.nav.predictions],
+    ['knockout', '🏟️', t.nav.knockout],
     ['sidebets', '🎲', t.nav.sidebets],
     ['leaderboard', '🏆', t.nav.leaderboard],
   ] as const

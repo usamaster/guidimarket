@@ -115,6 +115,7 @@ export interface MatchPrediction {
   yellow_cards: number | null
   red_cards: number | null
   first_scorer_name: string | null
+  advance_team_id: string | null
   boost_applied: boolean
   points_awarded: number | null
   resolved: boolean

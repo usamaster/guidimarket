@@ -1,44 +1,28 @@
 import type { Match, MatchPrediction } from './database.types'
 import { t } from './i18n'
 
-export type BoostStage = 'group' | 'r32' | 'r16' | 'qf' | 'sf' | 'final_phase'
+export type BoostStage = 'group' | 'knockout'
 
 export function boostStageOf(match: Match): BoostStage {
-  if (match.stage === 'group') return 'group'
-  switch (match.round) {
-    case 'Round of 32':           return 'r32'
-    case 'Round of 16':           return 'r16'
-    case 'Quarter-final':         return 'qf'
-    case 'Semi-final':            return 'sf'
-    case 'Match for third place':
-    case 'Final':
-      return 'final_phase'
-    default:
-      return 'group'
-  }
+  return match.stage === 'group' ? 'group' : 'knockout'
 }
 
 export function boostStageLabel(stage: BoostStage) {
-  switch (stage) {
-    case 'group':       return t.predictions.boostStageGroup
-    case 'r32':         return t.predictions.boostStageR32
-    case 'r16':         return t.predictions.boostStageR16
-    case 'qf':          return t.predictions.boostStageQF
-    case 'sf':          return t.predictions.boostStageSF
-    case 'final_phase': return t.predictions.boostStageFinal
-  }
+  return stage === 'group' ? t.predictions.boostStageGroup : t.predictions.boostStageKnockout
 }
 
 export function roundMultiplier(round: string): number {
   if (round.startsWith('Matchday ')) return 1
   switch (round) {
-    case 'Round of 32':           return 1.25
-    case 'Round of 16':           return 1.5
-    case 'Quarter-final':         return 2
-    case 'Semi-final':            return 2.5
-    case 'Match for third place': return 2
-    case 'Final':                 return 3
-    default:                      return 1
+    case 'Round of 32':
+    case 'Round of 16':
+    case 'Quarter-final':
+    case 'Semi-final':
+    case 'Match for third place':
+    case 'Final':
+      return 2
+    default:
+      return 1
   }
 }
 
@@ -48,7 +32,7 @@ export function countBoostsByStage(matchPredictions: MatchPrediction[], matches:
   const matchById = new Map<string, Match>()
   for (const m of matches) matchById.set(m.id, m)
   const counts: Record<BoostStage, number> = {
-    group: 0, r32: 0, r16: 0, qf: 0, sf: 0, final_phase: 0,
+    group: 0, knockout: 0,
   }
   for (const mp of matchPredictions) {
     if (!mp.boost_applied) continue
@@ -57,4 +41,26 @@ export function countBoostsByStage(matchPredictions: MatchPrediction[], matches:
     counts[boostStageOf(m)] += 1
   }
   return counts
+}
+
+export const KNOCKOUT_ROUND_ORDER = [
+  'Round of 32',
+  'Round of 16',
+  'Quarter-final',
+  'Semi-final',
+  'Match for third place',
+  'Final',
+] as const
+
+export function knockoutAdvancer(match: Match): string | null {
+  const { team1_id, team2_id, team1_score, team2_score, team1_et, team2_et, team1_pen, team2_pen } = match
+  if (!team1_id || !team2_id) return null
+  if (team1_score === null || team2_score === null) return null
+  if (team1_score > team2_score) return team1_id
+  if (team2_score > team1_score) return team2_id
+  if (team1_et !== null && team2_et !== null && team1_et > team2_et) return team1_id
+  if (team1_et !== null && team2_et !== null && team2_et > team1_et) return team2_id
+  if (team1_pen !== null && team2_pen !== null && team1_pen > team2_pen) return team1_id
+  if (team1_pen !== null && team2_pen !== null && team2_pen > team1_pen) return team2_id
+  return null
 }

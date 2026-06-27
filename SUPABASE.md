@@ -74,6 +74,7 @@ Per-user 90-minute score predictions for every individual match. Unique on `(use
 Columns:
 
 - `team1_score int`, `team2_score int` — predicted 90-minute regular-time scores (no extra time, no penalties).
+- `advance_team_id uuid → teams.id` — for knockout matches, who the player thinks advances (decided after ET/penalties). Worth +2 points when correct.
 - `boost_applied bool default false` — when true, the match's calculated points are doubled.
 - `points_awarded int`, `resolved bool`, `resolved_at timestamptz` — populated by `score_predictions()`.
 
@@ -108,20 +109,18 @@ Stage multiplier (applied to the base sum, then rounded to int):
 | Round | Multiplier |
 |-------|------------|
 | Group | 1× |
-| Round of 32 | 1.25× |
-| Round of 16 | 1.5× |
-| Quarter-final | 2× |
-| Semi-final | 2.5× |
-| Match for third place | 2× |
-| Final | 3× |
+| Any knockout round (R32 → Final) | 2× |
+
+Knockout matches also award **+2 points** for correctly predicting which team advances (`match_predictions.advance_team_id`), decided on the 90′ score, then extra time, then penalties (`knockout_advancer()`). The advance bonus is added before the boost doubling.
 
 ### Boosts (`match_predictions.boost_applied`)
 
-Each user has 3 boosts per stage (group / r32 / r16 / qf / sf / final_phase). A boost doubles the multiplied points for that single match. Toggleable via the `apply_boost(match_id, applied)` RPC, which:
+Two boost pools (`boost_stage_key()`): **3 in the group stage** and **3 for the entire knockout phase**. A boost doubles the match's total points (score + advance bonus). Toggleable via the `apply_boost(match_id, applied)` RPC, which:
 
 1. Rejects if the match has already kicked off.
-2. Rejects if turning a boost on would exceed 3 used boosts in that stage.
-3. Upserts the `match_predictions` row.
+2. Rejects if turning a boost on would exceed 3 used boosts in that pool (`group` / `knockout`).
+3. Group matches are blocked once the pool is locked; knockout matches stay boostable until each match's kickoff.
+4. Upserts the `match_predictions` row.
 
 ### Tournament awards
 
@@ -188,6 +187,19 @@ Asymmetric peer-to-peer bets. `proposer_stake` and `opponent_stake` are independ
 - `cancel_side_bet(p_bet_id) → side_bets`
   - Proposer-only (admin can also cancel). Refunds the proposer's stake. Status must be `open`.
 
+### Knockout bracket (auto-advance)
+
+Knockout matches carry a progression rule in `team1_placeholder` / `team2_placeholder`:
+
+- `W{n}` / `L{n}` — winner / loser of match number `n` (mapped via `external_id = 'wc2026-{n}'`).
+- `1{X}` / `2{X}` — winner / runner-up of group `X` (computed once all of that group's matches are finished).
+- `3…` — best-third slots; filled manually by the admin (the FIFA allocation depends on the third-place combination).
+
+`resolve_bracket()` fills every slot it can compute and **never clobbers a slot with null**, so manual assignments and overrides survive. It runs automatically via the `matches_resolve_bracket` statement-level trigger whenever a result is entered (`pg_trigger_depth()` guards recursion) — so entering a knockout result instantly populates the next round's teams. No external worker or cron needed.
+
+- `admin_resolve_bracket() → integer` — manual re-run; returns the number of slots updated.
+- `admin_set_match_teams(match_id, team1_id, team2_id) → matches` — manual slot override (best-thirds, corrections). Pass `null` to clear a slot.
+
 ### Admin only (`is_admin()` check)
 
 - `admin_topup_tokens(user_id, amount) → profiles` — adds tokens after irl payment.
@@ -241,6 +253,7 @@ npm run apply-schema     # runs supabase/worldcup_schema.sql
 npm run apply-scoring    # runs supabase/scoring.sql (boost column, tournament_results, scoring RPCs)
 npm run apply-lock       # runs supabase/lock-predictions.sql (global lock + tightened RLS)
 npm run apply-chat       # runs supabase/chat.sql (group chat messages table + realtime)
+npm run apply-knockout   # runs supabase/knockout.sql (knockout phase: advance prediction, 2× scoring, single knockout boost pool, bracket auto-advance trigger, per-match-until-kickoff RLS)
 npm run seed-worldcup    # fetches openfootball 2026 JSON and upserts teams + matches + side-bet templates
 ```
 
@@ -279,9 +292,13 @@ DATABASE_URL=<postgres URL from Supabase → Settings → Database>
 | `src/components/ChatBox.tsx` | Floating bottom-right chat sidebox with realtime messages and unread badge |
 | `src/components/AdminPanel.tsx` | Lock pool, topup tokens, mark paid, set winner, set tournament results, recompute scores, resolve bets |
 
+### Knockout page (`src/components/KnockoutPage.tsx`)
+
+Separate "Knockout" nav tab. Lists every knockout match grouped by round. Per match the player predicts the 90′ score and picks which team advances, plus a ⚡ boost (shared pool of 3). Matches become editable as soon as both teams are known and stay editable until kickoff — even after the group/tournament pool is locked. The previous round's results auto-fill the next round's teams (via the bracket trigger), so players can keep predicting without admin intervention beyond entering scores.
+
 ## What's left for later
 
-- Knockout-stage match prediction UI (the bracket only fills in once the group stage resolves; for now the same scoring rules + boost system already apply to those rows once the user can fill them).
 - Second prediction round after group stage (`round_locked` already supports it).
-- Live-score ingestion (column slots + `resolve_side_bet` + `score_predictions` already exist, no worker yet).
+- Live-score ingestion (column slots + `resolve_side_bet` + `score_predictions` already exist, no worker yet) — would also auto-fire the bracket trigger.
 - Real EUR payout to winner (manual: pay irl, then call `admin_set_main_winner`).
+- Automatic best-third (`3…`) allocation — currently assigned by the admin via `admin_set_match_teams`.

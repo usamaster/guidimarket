@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
-import { t, fmtTokens } from '../lib/i18n'
+import { t, fmtTokens, fmtKickoff } from '../lib/i18n'
 import type { AppState, Match, Profile, SideBet, Team, TournamentResult } from '../lib/database.types'
 import { TeamSelect } from './TeamSelect'
 import { AdminMatchStats } from './AdminMatchStats'
@@ -78,6 +78,9 @@ export function AdminPanel({ profiles, appState, sideBets, teams, matches, tourn
   const [pointsValue, setPointsValue] = useState<number>(0)
   const [resolveBetId, setResolveBetId] = useState('')
   const [resolveOutcome, setResolveOutcome] = useState<'proposer' | 'opponent' | 'push'>('proposer')
+  const [koMatchId, setKoMatchId] = useState<string>('')
+  const [koTeam1, setKoTeam1] = useState<string>('')
+  const [koTeam2, setKoTeam2] = useState<string>('')
   const [resultType, setResultType] = useState<string>('winner')
   const [resultTeamId, setResultTeamId] = useState<string>('')
   const [resultPlayerName, setResultPlayerName] = useState<string>('')
@@ -121,6 +124,32 @@ export function AdminPanel({ profiles, appState, sideBets, teams, matches, tourn
 
   const sortedTeams = useMemo(() => [...teams].sort((a, b) => a.name.localeCompare(b.name)), [teams])
   const currentDef = RESULT_DEFS.find(d => d.type === resultType) || RESULT_DEFS[0]
+
+  const teamNameById = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const team of teams) m.set(team.id, team.name)
+    return m
+  }, [teams])
+
+  const knockoutMatches = useMemo(
+    () => matches
+      .filter(m => m.stage === 'knockout')
+      .sort((a, b) => new Date(a.kickoff_at).getTime() - new Date(b.kickoff_at).getTime()),
+    [matches],
+  )
+
+  const koMatchLabel = (m: Match) => {
+    const n1 = m.team1_id ? teamNameById.get(m.team1_id) ?? m.team1_placeholder : m.team1_placeholder
+    const n2 = m.team2_id ? teamNameById.get(m.team2_id) ?? m.team2_placeholder : m.team2_placeholder
+    return `${m.round} · ${fmtKickoff(m.kickoff_at)} — ${n1 || '?'} vs ${n2 || '?'}`
+  }
+
+  const selectKoMatch = (id: string) => {
+    setKoMatchId(id)
+    const m = id ? matches.find(x => x.id === id) || null : null
+    setKoTeam1(m?.team1_id || '')
+    setKoTeam2(m?.team2_id || '')
+  }
 
   const run = async (fn: () => PromiseLike<{ error: { message: string } | null }>) => {
     setBusy(true); setError(null); setSuccess(null)
@@ -197,6 +226,75 @@ export function AdminPanel({ profiles, appState, sideBets, teams, matches, tourn
         >
           {t.admin.matchStatsButton}
         </button>
+      </section>
+
+      <section className="bg-card border border-border rounded-xl p-4 flex flex-col gap-3">
+        <div>
+          <h2 className="text-sm font-bold text-dark">{t.admin.bracketTitle}</h2>
+          <p className="text-xs text-text-muted mt-0.5">{t.admin.bracketHint}</p>
+        </div>
+
+        <div className="flex items-center gap-3 flex-wrap">
+          <button
+            disabled={busy}
+            onClick={() => run(() => supabase.rpc('admin_resolve_bracket'))}
+            className="bg-primary hover:bg-primary-hover disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-full cursor-pointer"
+          >
+            {t.admin.bracketResolve}
+          </button>
+          <span className="text-xs text-text-muted">{t.admin.bracketResolveHint}</span>
+        </div>
+
+        <div className="border-t border-border pt-3 flex flex-col gap-2">
+          <span className="text-xs font-medium text-text-secondary">{t.admin.bracketSetTeams}</span>
+          <select
+            value={koMatchId}
+            onChange={e => selectKoMatch(e.target.value)}
+            className="bg-bg border border-border rounded-md px-2 py-2 text-sm"
+          >
+            <option value="">{t.admin.bracketSelectMatch}</option>
+            {knockoutMatches.map(m => (
+              <option key={m.id} value={m.id}>{koMatchLabel(m)}</option>
+            ))}
+          </select>
+          {koMatchId && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] text-text-muted">{t.admin.bracketTeam1}</span>
+                <TeamSelect
+                  teams={sortedTeams}
+                  value={koTeam1 || null}
+                  onChange={id => setKoTeam1(id || '')}
+                  placeholder="—"
+                  allowEmpty
+                  emptyLabel="—"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[11px] text-text-muted">{t.admin.bracketTeam2}</span>
+                <TeamSelect
+                  teams={sortedTeams}
+                  value={koTeam2 || null}
+                  onChange={id => setKoTeam2(id || '')}
+                  placeholder="—"
+                  allowEmpty
+                  emptyLabel="—"
+                />
+              </label>
+              <button
+                disabled={busy}
+                onClick={() => run(() => supabase.rpc('admin_set_match_teams', {
+                  p_match_id: koMatchId,
+                  p_team1_id: koTeam1 || null,
+                  p_team2_id: koTeam2 || null,
+                }))}
+                className="sm:col-span-2 bg-primary hover:bg-primary-hover disabled:opacity-50 text-white text-sm font-semibold px-4 py-2 rounded-full cursor-pointer self-start"
+              >
+                {t.admin.bracketSaveTeams}
+              </button>
+            </div>
+          )}
+        </div>
       </section>
 
       <section className="bg-card border border-border rounded-xl p-4">

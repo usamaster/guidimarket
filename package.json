@@ -16,6 +16,7 @@
     "apply-scoring-extra": "node --env-file=.env scripts/apply-sql.mjs supabase/scoring-extra.sql",
     "apply-prediction-status": "node --env-file=.env scripts/apply-sql.mjs supabase/prediction-status.sql",
     "apply-match-results": "node --env-file=.env scripts/apply-sql.mjs supabase/match-results.sql",
+    "apply-knockout": "node --env-file=.env scripts/apply-sql.mjs supabase/knockout.sql",
     "seed-worldcup": "node --env-file=.env scripts/seed-worldcup.mjs"
   },
   "dependencies": {

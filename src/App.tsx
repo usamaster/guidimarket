@@ -17,6 +17,7 @@ import { Header, type Page } from './components/Header'
 import { LoginScreen } from './components/LoginScreen'
 import { DisplayNameForm } from './components/DisplayNameForm'
 import { PredictionsPage } from './components/PredictionsPage'
+import { KnockoutPage } from './components/KnockoutPage'
 import { AllPredictionsView } from './components/AllPredictionsView'
 import { SideBetsPage } from './components/SideBetsPage'
 import { Leaderboard } from './components/Leaderboard'
@@ -347,6 +348,16 @@ function App() {
               onSwitchToOthers={locked ? () => setPredictionsView('others') : undefined}
             />
           )
+        ) : page === 'knockout' ? (
+          <KnockoutPage
+            userId={session.user.id}
+            profiles={data.profiles}
+            appState={data.appState}
+            teams={data.teams}
+            matches={data.matches}
+            matchPredictions={data.matchPredictions}
+            onSaved={handleRefresh}
+          />
         ) : page === 'sidebets' ? (
           <SideBetsPage
             userId={session.user.id}
