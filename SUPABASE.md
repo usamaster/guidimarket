@@ -242,7 +242,8 @@ Frontend subscribes in `App.tsx` and refetches the view via `setRefreshKey` when
 | profiles, teams, matches, side_bet_templates, side_bets, app_state, tournament_results | `read all` | SELECT for everyone |
 | profiles | `self update` | UPDATE only when `auth.uid() = user_id` |
 | group_predictions | `self write` | ALL only for own rows |
-| match_predictions, tournament_predictions | `read locked or own` (SELECT) | Anyone can read once `predictions_are_locked()` returns true; otherwise only own rows |
+| tournament_predictions | `read locked or own` (SELECT) | Anyone can read once `predictions_are_locked()` returns true; otherwise only own rows |
+| match_predictions | `read open or own` (SELECT) | Always own rows. Others' rows: group matches once `predictions_are_locked()`; knockout matches only once that match's **round has started** (`knockout_round_started(round)` — earliest kickoff in the round is in the past). So each knockout round stays hidden until its first match kicks off. |
 | match_predictions, tournament_predictions | `self insert/update/delete pre lock` | Writes only when `auth.uid() = user_id` AND `predictions_are_locked() = false` |
 | side_bets | (no direct INSERT/UPDATE policy) | All writes go through SECURITY DEFINER RPCs that enforce stake/tokens rules |
 

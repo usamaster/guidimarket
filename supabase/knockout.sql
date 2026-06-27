@@ -387,6 +387,54 @@ create policy "self delete open" on public.match_predictions
   );
 
 -- ----------------------------------------------------------------------------
+-- 10b) RLS read: others' predictions become visible per the timing rules.
+--   - group match     : visible to everyone once the pool is locked (unchanged)
+--   - knockout match  : visible to others only once that match's ROUND has
+--                       started (earliest kickoff in the round is in the past)
+-- A player can always read their own rows.
+-- ----------------------------------------------------------------------------
+create or replace function public.knockout_round_started(p_round text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.matches m
+     where m.stage = 'knockout'
+       and m.round = p_round
+       and m.kickoff_at <= now()
+  );
+$$;
+
+create or replace function public.match_pred_readable(p_match_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.matches m
+     where m.id = p_match_id
+       and (
+         (m.stage = 'group' and public.predictions_are_locked())
+         or (m.stage = 'knockout' and public.knockout_round_started(m.round))
+       )
+  );
+$$;
+
+drop policy if exists "read locked or own" on public.match_predictions;
+drop policy if exists "read open or own"   on public.match_predictions;
+
+create policy "read open or own" on public.match_predictions
+  for select using (
+    auth.uid() = user_id
+    or public.match_pred_readable(match_id)
+  );
+
+-- ----------------------------------------------------------------------------
 -- 11) Scoring: knockout score x2 (via round_multiplier) + 2 advance points
 -- ----------------------------------------------------------------------------
 create or replace function public.score_predictions()
