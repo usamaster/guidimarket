@@ -313,6 +313,9 @@ begin
   if v_match.stage = 'group' and public.predictions_are_locked() then
     raise exception 'voorspellingen zijn vergrendeld';
   end if;
+  if v_match.stage = 'knockout' and public.knockout_round_started(v_match.round) then
+    raise exception 'deze knockout-ronde is al begonnen';
+  end if;
   if v_match.kickoff_at <= now() then raise exception 'wedstrijd is al begonnen'; end if;
 
   v_stage := public.boost_stage_key(v_match.round, v_match.stage);
@@ -342,8 +345,24 @@ end $$;
 grant execute on function public.apply_boost(uuid, boolean) to authenticated;
 
 -- ----------------------------------------------------------------------------
--- 10) RLS: keep pre-lock behaviour, but allow knockout writes until kickoff
+-- 10) RLS: keep pre-lock behaviour, but allow knockout writes until the round
+--     starts. A whole knockout round locks at the kickoff of its first match.
 -- ----------------------------------------------------------------------------
+create or replace function public.knockout_round_started(p_round text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.matches m
+     where m.stage = 'knockout'
+       and m.round = p_round
+       and m.kickoff_at <= now()
+  );
+$$;
+
 create or replace function public.match_pred_writable(p_match_id uuid)
 returns boolean
 language sql
@@ -357,7 +376,7 @@ as $$
       select 1 from public.matches m
        where m.id = p_match_id
          and m.stage = 'knockout'
-         and m.kickoff_at > now()
+         and not public.knockout_round_started(m.round)
     )
   end;
 $$;
@@ -393,21 +412,6 @@ create policy "self delete open" on public.match_predictions
 --                       started (earliest kickoff in the round is in the past)
 -- A player can always read their own rows.
 -- ----------------------------------------------------------------------------
-create or replace function public.knockout_round_started(p_round text)
-returns boolean
-language sql
-stable
-security definer
-set search_path = public
-as $$
-  select exists (
-    select 1 from public.matches m
-     where m.stage = 'knockout'
-       and m.round = p_round
-       and m.kickoff_at <= now()
-  );
-$$;
-
 create or replace function public.match_pred_readable(p_match_id uuid)
 returns boolean
 language sql

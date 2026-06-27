@@ -61,22 +61,21 @@ interface MatchCardProps {
   prediction: MatchPrediction | undefined
   boostsUsed: number
   busy: boolean
-  now: number
+  roundStarted: boolean
   onChange: (next: KoDraft) => void
   onToggleBoost: (applied: boolean) => void
 }
 
-function MatchCard({ match, teamsById, draft, prediction, boostsUsed, busy, now, onChange, onToggleBoost }: MatchCardProps) {
+function MatchCard({ match, teamsById, draft, prediction, boostsUsed, busy, roundStarted, onChange, onToggleBoost }: MatchCardProps) {
   const team1 = match.team1_id ? teamsById.get(match.team1_id) || null : null
   const team2 = match.team2_id ? teamsById.get(match.team2_id) || null : null
   const teamsKnown = !!team1 && !!team2
-  const kickedOff = new Date(match.kickoff_at).getTime() <= now
-  const editable = teamsKnown && !kickedOff
+  const editable = teamsKnown && !roundStarted
   const finished = match.status === 'finished' && match.team1_score !== null && match.team2_score !== null
 
   const boostApplied = prediction?.boost_applied ?? false
   const poolFull = !boostApplied && boostsUsed >= BOOSTS_PER_STAGE
-  const boostDisabled = busy || kickedOff || poolFull || !teamsKnown
+  const boostDisabled = busy || roundStarted || poolFull || !teamsKnown
 
   const earnedPts = prediction?.points_awarded ?? null
   const actualAdvancer = finished ? knockoutAdvancer(match) : null
@@ -140,7 +139,7 @@ function MatchCard({ match, teamsById, draft, prediction, boostsUsed, busy, now,
           type="button"
           onClick={() => onToggleBoost(!boostApplied)}
           disabled={boostDisabled}
-          title={kickedOff ? t.predictions.boostKickedOff : poolFull ? t.predictions.boostMaxReached : t.predictions.boostHint}
+          title={roundStarted ? t.predictions.boostKickedOff : poolFull ? t.predictions.boostMaxReached : t.predictions.boostHint}
           className={`shrink-0 w-8 h-8 rounded-full text-base flex items-center justify-center transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-40 ${
             boostApplied ? 'bg-primary text-white shadow-sm' : 'bg-bg text-text-muted hover:text-primary hover:bg-primary/10'
           }`}
@@ -184,8 +183,8 @@ function MatchCard({ match, teamsById, draft, prediction, boostsUsed, busy, now,
           {t.knockout.finalScore}: {team1?.name} {match.team1_score} - {match.team2_score} {team2?.name}
         </p>
       )}
-      {teamsKnown && kickedOff && !finished && (
-        <p className="text-[11px] text-text-muted">{t.knockout.kickedOff}</p>
+      {teamsKnown && roundStarted && !finished && (
+        <p className="text-[11px] text-text-muted">{t.knockout.roundLocked}</p>
       )}
     </div>
   )
@@ -344,11 +343,18 @@ export function KnockoutPage({ userId, profiles, appState, teams, matches, match
       {visibleRounds.map(round => {
         const list = matchesByRound.get(round) || []
         const allUnknown = list.every(m => !m.team1_id || !m.team2_id)
+        const roundStarted = list.some(m => new Date(m.kickoff_at).getTime() <= now)
         return (
           <section key={round} className="bg-card border border-border rounded-xl p-4 sm:p-5 flex flex-col gap-1">
             <div className="flex items-baseline justify-between gap-3 mb-2">
               <h2 className="text-base font-bold text-dark">{round}</h2>
-              {allUnknown && <span className="text-[11px] text-text-muted">{t.knockout.teamsUnknown}</span>}
+              {roundStarted ? (
+                <span className="text-[11px] font-semibold text-no bg-no-light border border-no/20 rounded-full px-2 py-0.5">
+                  🔒 {t.knockout.roundLockedTag}
+                </span>
+              ) : allUnknown ? (
+                <span className="text-[11px] text-text-muted">{t.knockout.teamsUnknown}</span>
+              ) : null}
             </div>
             <div className="flex flex-col divide-y divide-border">
               {list.map(match => (
@@ -360,7 +366,7 @@ export function KnockoutPage({ userId, profiles, appState, teams, matches, match
                   prediction={predById.get(match.id)}
                   boostsUsed={boostsUsed}
                   busy={boostBusyId === match.id}
-                  now={now}
+                  roundStarted={roundStarted}
                   onChange={next => setMatch(match.id, next)}
                   onToggleBoost={applied => handleToggleBoost(match.id, applied)}
                 />

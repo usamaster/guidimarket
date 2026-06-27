@@ -182,6 +182,8 @@ export const t = {
     teamsUnknownHint: 'Komt automatisch zodra de vorige ronde gespeeld is.',
     notStartedYet: 'Er zijn nog geen knockout-wedstrijden met bekende teams.',
     kickedOff: 'Aftrap geweest — voorspelling staat vast.',
+    roundLocked: 'Ronde gestart — voorspelling staat vast.',
+    roundLockedTag: 'Ronde gestart',
     finalScore: 'Eindstand',
     advancedTag: 'ging door',
     advanceCorrect: '+2 doorgang',
