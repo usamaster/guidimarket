@@ -53,13 +53,24 @@
 }
 
 @layer base {
+  html, body {
+    margin: 0;
+    overflow-x: hidden;
+    overscroll-behavior-y: none;
+  }
+
   body {
     @apply bg-bg text-text antialiased;
-    margin: 0;
   }
 
   html.dark {
     color-scheme: dark;
+  }
+}
+
+@supports (height: 100dvh) {
+  .min-h-screen {
+    min-height: 100dvh;
   }
 }
 

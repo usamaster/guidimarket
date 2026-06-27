@@ -312,7 +312,7 @@ function App() {
         onRefresh={handleManualRefresh}
       />
 
-      <main className="flex-1 pb-12 sm:pb-0">
+      <main className="flex-1 pb-[calc(3rem+env(safe-area-inset-bottom))] sm:pb-0">
         {showAdmin && isAdmin ? (
           <AdminPanel
             profiles={data.profiles}

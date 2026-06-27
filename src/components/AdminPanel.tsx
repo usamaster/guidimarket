@@ -12,6 +12,8 @@ interface CompletionRow {
   matches_total: number
   tournament_done: number
   tournament_total: number
+  knockout_done: number
+  knockout_total: number
 }
 
 interface SyncPreviewRow {
@@ -122,7 +124,11 @@ export function AdminPanel({ profiles, appState, sideBets, teams, matches, tourn
   }
 
   const incompleteRows = useMemo(
-    () => completion.filter(r => r.matches_done < r.matches_total || r.tournament_done < r.tournament_total),
+    () => completion.filter(r =>
+      r.matches_done < r.matches_total
+      || r.tournament_done < r.tournament_total
+      || r.knockout_done < r.knockout_total,
+    ),
     [completion],
   )
   const completeCount = completion.length - incompleteRows.length
@@ -245,9 +251,12 @@ export function AdminPanel({ profiles, appState, sideBets, teams, matches, tourn
             {incompleteRows.map(row => (
               <li key={row.user_id} className="py-2.5 flex items-center justify-between gap-3">
                 <span className="text-sm font-medium text-dark truncate min-w-0">{row.display_name || '—'}</span>
-                <div className="flex items-center gap-1.5 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
                   <ProgressPill label={t.admin.completionMatches} done={row.matches_done} total={row.matches_total} />
                   <ProgressPill label={t.admin.completionBonus} done={row.tournament_done} total={row.tournament_total} />
+                  {row.knockout_total > 0 && (
+                    <ProgressPill label={t.admin.completionKnockout} done={row.knockout_done} total={row.knockout_total} />
+                  )}
                 </div>
               </li>
             ))}

@@ -9,6 +9,8 @@
 
 begin;
 
+drop function if exists public.admin_prediction_status();
+
 create or replace function public.admin_prediction_status()
 returns table (
   user_id          uuid,
@@ -16,14 +18,17 @@ returns table (
   matches_done     integer,
   matches_total    integer,
   tournament_done  integer,
-  tournament_total integer
+  tournament_total integer,
+  knockout_done    integer,
+  knockout_total   integer
 )
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
-  v_matches_total integer;
+  v_matches_total  integer;
+  v_knockout_total integer;
   v_types text[] := array[
     'winner','runner_up','third','fourth','most_goals_against',
     'top_scorer','golden_ball','young_player','golden_glove','dutch_zero_minutes',
@@ -39,6 +44,15 @@ begin
     and m.team1_id is not null
     and m.team2_id is not null;
 
+  -- Knockout matches that are currently predictable: teams known and the
+  -- round hasn't started yet. Started/locked rounds aren't counted as missing.
+  select count(*)::integer into v_knockout_total
+  from public.matches m
+  where m.stage = 'knockout'
+    and m.team1_id is not null
+    and m.team2_id is not null
+    and not public.knockout_round_started(m.round);
+
   return query
   select
     p.user_id,
@@ -46,7 +60,9 @@ begin
     coalesce(mp.cnt, 0)::integer        as matches_done,
     v_matches_total                     as matches_total,
     coalesce(tp.cnt, 0)::integer        as tournament_done,
-    array_length(v_types, 1)::integer   as tournament_total
+    array_length(v_types, 1)::integer   as tournament_total,
+    coalesce(ko.cnt, 0)::integer        as knockout_done,
+    v_knockout_total                    as knockout_total
   from public.profiles p
   left join (
     select mp.user_id, count(distinct mp.match_id) as cnt
@@ -71,8 +87,21 @@ begin
       )
     group by tp.user_id
   ) tp on tp.user_id = p.user_id
+  left join (
+    select mp.user_id, count(distinct mp.match_id) as cnt
+    from public.match_predictions mp
+    join public.matches m on m.id = mp.match_id
+    where mp.team1_score is not null
+      and mp.team2_score is not null
+      and mp.advance_team_id is not null
+      and m.stage = 'knockout'
+      and m.team1_id is not null
+      and m.team2_id is not null
+      and not public.knockout_round_started(m.round)
+    group by mp.user_id
+  ) ko on ko.user_id = p.user_id
   order by
-    (coalesce(mp.cnt, 0) + coalesce(tp.cnt, 0)) asc,
+    (coalesce(mp.cnt, 0) + coalesce(tp.cnt, 0) + coalesce(ko.cnt, 0)) asc,
     p.display_name asc;
 end $$;
 

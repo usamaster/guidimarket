@@ -12,7 +12,7 @@ export function StickySaveBar({ dirtyCount, saving, error, onSave, onDiscard }: 
   if (dirtyCount < 1 && !error) return null
 
   return (
-    <div className="fixed bottom-16 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 px-4 w-full max-w-md pointer-events-none pb-[env(safe-area-inset-bottom)]">
+    <div className="fixed bottom-[calc(4rem+env(safe-area-inset-bottom))] sm:bottom-6 left-1/2 -translate-x-1/2 z-40 px-4 w-full max-w-md pointer-events-none">
       <div className="pointer-events-auto bg-dark text-card shadow-lg rounded-full pl-5 pr-2 py-2 flex items-center gap-2 sm:gap-3 ring-1 ring-black/10">
         <div className="flex flex-col min-w-0">
           <span className="text-sm font-semibold truncate">
