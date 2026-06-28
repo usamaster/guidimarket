@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { t, fmtKickoff } from '../lib/i18n'
 import type { Match, MatchPrediction, Profile, Team, TournamentPrediction, TournamentResult } from '../lib/database.types'
+import { knockoutAdvancer } from '../lib/scoring'
 import { Flag } from './Flag'
 
 interface AllPredictionsViewProps {
@@ -126,6 +127,8 @@ export function AllPredictionsView({
 
   const team1 = focusMatch.team1_id ? teamsById.get(focusMatch.team1_id) || null : null
   const team2 = focusMatch.team2_id ? teamsById.get(focusMatch.team2_id) || null : null
+  const isKnockout = focusMatch.stage === 'knockout'
+  const actualAdvancerId = isKnockout ? knockoutAdvancer(focusMatch) : null
   const status = statusOf(focusMatch, now)
   const finished = focusMatch.status === 'finished' && focusMatch.team1_score !== null && focusMatch.team2_score !== null
   const totalPlayers = profiles.length
@@ -274,6 +277,8 @@ export function AllPredictionsView({
             const boosted = pred?.boost_applied
             const earned = finished && pred?.points_awarded !== null && pred?.points_awarded !== undefined ? pred.points_awarded : null
             const isMe = profile.user_id === currentUserId
+            const advanceTeam = isKnockout && pred?.advance_team_id ? teamsById.get(pred.advance_team_id) || null : null
+            const advanceCorrect = advanceTeam && actualAdvancerId ? pred!.advance_team_id === actualAdvancerId : null
 
             return (
               <div
@@ -298,6 +303,15 @@ export function AllPredictionsView({
                   </div>
                   {!has && (
                     <p className="text-[11px] text-text-muted">{t.others.noPrediction}</p>
+                  )}
+                  {advanceTeam && (
+                    <p className="text-[11px] text-text-secondary flex items-center gap-1 mt-0.5 min-w-0">
+                      <span className="text-text-muted shrink-0">{t.knockout.advanceShort}:</span>
+                      <Flag emoji={advanceTeam.flag_emoji} className="inline-block w-3.5 h-3.5 shrink-0 align-[-0.15em]" />
+                      <span className="truncate font-medium text-dark">{advanceTeam.name}</span>
+                      {advanceCorrect === true && <span className="text-yes font-bold shrink-0">✓</span>}
+                      {advanceCorrect === false && <span className="text-no font-bold shrink-0">✗</span>}
+                    </p>
                   )}
                 </div>
                 {has && (
