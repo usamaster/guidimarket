@@ -566,13 +566,13 @@ begin
       elsif v_pred.prediction_type = 'top_scorer' then
         if v_actual.string_value is not null
            and v_pred.string_value is not null
-           and lower(trim(v_pred.string_value)) = lower(trim(v_actual.string_value)) then
+           and public.names_match(v_pred.string_value, v_actual.string_value) then
           v_pts := 15;
         end if;
       elsif v_pred.prediction_type in ('golden_ball','young_player','golden_glove') then
         if v_actual.string_value is not null
            and v_pred.string_value is not null
-           and lower(trim(v_pred.string_value)) = lower(trim(v_actual.string_value)) then
+           and public.names_match(v_pred.string_value, v_actual.string_value) then
           v_pts := 10;
         end if;
       elsif v_pred.prediction_type = 'dutch_zero_minutes' then
