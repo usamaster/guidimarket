@@ -502,7 +502,9 @@ begin
         v_match_pts := public.score_match(v_pred.pt1, v_pred.pt2, v_pred.at1, v_pred.at2);
         v_match_pts := round(v_match_pts * public.round_multiplier(v_pred.mround))::integer;
 
-        if v_pred.mstage = 'knockout' and v_pred.adv_pred is not null then
+        if v_pred.mstage = 'knockout'
+           and v_pred.mround not in ('Final', 'Match for third place')
+           and v_pred.adv_pred is not null then
           v_advancer := public.knockout_advancer(
             v_pred.m_t1, v_pred.m_t2,
             v_pred.at1, v_pred.at2,

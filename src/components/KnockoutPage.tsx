@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { t, fmtKickoff } from '../lib/i18n'
 import type { AppState, Match, MatchPrediction, Profile, Team } from '../lib/database.types'
-import { BOOSTS_PER_STAGE, KNOCKOUT_ROUND_ORDER, countBoostsByStage, knockoutAdvancer } from '../lib/scoring'
+import { BOOSTS_PER_STAGE, KNOCKOUT_ROUND_ORDER, countBoostsByStage, knockoutAdvancer, roundHasAdvancer } from '../lib/scoring'
 import { PrizePotBanner } from './PrizePotBanner'
 import { StickySaveBar } from './StickySaveBar'
 import { Flag } from './Flag'
@@ -78,6 +78,7 @@ function MatchCard({ match, teamsById, draft, prediction, boostsUsed, busy, roun
   const boostDisabled = busy || roundStarted || poolFull || !teamsKnown
 
   const earnedPts = prediction?.points_awarded ?? null
+  const showAdvance = roundHasAdvancer(match.round)
   const actualAdvancer = finished ? knockoutAdvancer(match) : null
 
   const handleScore = (slot: 'team1_score' | 'team2_score', raw: string) => {
@@ -150,7 +151,7 @@ function MatchCard({ match, teamsById, draft, prediction, boostsUsed, busy, roun
 
       {!teamsKnown ? (
         <p className="text-[11px] text-text-muted">{t.knockout.teamsUnknownHint}</p>
-      ) : (
+      ) : showAdvance ? (
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] uppercase tracking-wide text-text-muted shrink-0">{t.knockout.advance}</span>
           {[team1, team2].map(team => team && (
@@ -176,7 +177,7 @@ function MatchCard({ match, teamsById, draft, prediction, boostsUsed, busy, roun
             <span className="text-[10px] font-bold text-yes bg-yes-light px-2 py-0.5 rounded-full">{t.knockout.advanceCorrect}</span>
           )}
         </div>
-      )}
+      ) : null}
 
       {finished && (
         <p className="text-[11px] text-text-muted">
