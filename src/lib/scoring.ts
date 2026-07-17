@@ -28,10 +28,6 @@ export function roundMultiplier(round: string): number {
 
 export const BOOSTS_PER_STAGE = 3
 
-export function roundHasAdvancer(round: string): boolean {
-  return round !== 'Final' && round !== 'Match for third place'
-}
-
 export function countBoostsByStage(matchPredictions: MatchPrediction[], matches: Match[]): Record<BoostStage, number> {
   const matchById = new Map<string, Match>()
   for (const m of matches) matchById.set(m.id, m)

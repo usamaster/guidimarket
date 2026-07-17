@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { t, fmtKickoff } from '../lib/i18n'
 import type { Match, MatchPrediction, Profile, Team, TournamentPrediction, TournamentResult } from '../lib/database.types'
-import { knockoutAdvancer, roundHasAdvancer } from '../lib/scoring'
+import { knockoutAdvancer } from '../lib/scoring'
 import { Flag } from './Flag'
 
 interface AllPredictionsViewProps {
@@ -127,7 +127,7 @@ export function AllPredictionsView({
 
   const team1 = focusMatch.team1_id ? teamsById.get(focusMatch.team1_id) || null : null
   const team2 = focusMatch.team2_id ? teamsById.get(focusMatch.team2_id) || null : null
-  const isKnockout = focusMatch.stage === 'knockout' && roundHasAdvancer(focusMatch.round)
+  const isKnockout = focusMatch.stage === 'knockout'
   const actualAdvancerId = isKnockout ? knockoutAdvancer(focusMatch) : null
   const status = statusOf(focusMatch, now)
   const finished = focusMatch.status === 'finished' && focusMatch.team1_score !== null && focusMatch.team2_score !== null

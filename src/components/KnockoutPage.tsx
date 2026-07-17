@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { t, fmtKickoff } from '../lib/i18n'
 import type { AppState, Match, MatchPrediction, Profile, Team } from '../lib/database.types'
-import { BOOSTS_PER_STAGE, KNOCKOUT_ROUND_ORDER, countBoostsByStage, knockoutAdvancer, roundHasAdvancer } from '../lib/scoring'
+import { BOOSTS_PER_STAGE, KNOCKOUT_ROUND_ORDER, countBoostsByStage, knockoutAdvancer } from '../lib/scoring'
 import { PrizePotBanner } from './PrizePotBanner'
 import { StickySaveBar } from './StickySaveBar'
 import { Flag } from './Flag'
@@ -78,7 +78,11 @@ function MatchCard({ match, teamsById, draft, prediction, boostsUsed, busy, roun
   const boostDisabled = busy || roundStarted || poolFull || !teamsKnown
 
   const earnedPts = prediction?.points_awarded ?? null
-  const showAdvance = roundHasAdvancer(match.round)
+  const bothScores = draft.team1_score !== null && draft.team2_score !== null
+  const isDrawPick = bothScores && Number(draft.team1_score) === Number(draft.team2_score)
+  const derivedWinnerId = bothScores && !isDrawPick
+    ? (Number(draft.team1_score) > Number(draft.team2_score) ? match.team1_id : match.team2_id)
+    : null
   const actualAdvancer = finished ? knockoutAdvancer(match) : null
 
   const handleScore = (slot: 'team1_score' | 'team2_score', raw: string) => {
@@ -151,9 +155,9 @@ function MatchCard({ match, teamsById, draft, prediction, boostsUsed, busy, roun
 
       {!teamsKnown ? (
         <p className="text-[11px] text-text-muted">{t.knockout.teamsUnknownHint}</p>
-      ) : showAdvance ? (
+      ) : isDrawPick ? (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] uppercase tracking-wide text-text-muted shrink-0">{t.knockout.advance}</span>
+          <span className="text-[11px] uppercase tracking-wide text-text-muted shrink-0">{t.knockout.advanceDraw}</span>
           {[team1, team2].map(team => team && (
             <button
               key={team.id}
@@ -177,6 +181,13 @@ function MatchCard({ match, teamsById, draft, prediction, boostsUsed, busy, roun
             <span className="text-[10px] font-bold text-yes bg-yes-light px-2 py-0.5 rounded-full">{t.knockout.advanceCorrect}</span>
           )}
         </div>
+      ) : derivedWinnerId ? (
+        <p className="text-[11px] text-text-muted">
+          {t.knockout.advanceAuto}: {(derivedWinnerId === team1?.id ? team1 : team2)?.name}
+          {finished && actualAdvancer && derivedWinnerId === actualAdvancer && (
+            <span className="ml-1.5 text-[10px] font-bold text-yes bg-yes-light px-2 py-0.5 rounded-full">{t.knockout.advanceCorrect}</span>
+          )}
+        </p>
       ) : null}
 
       {finished && (

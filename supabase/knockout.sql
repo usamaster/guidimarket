@@ -32,6 +32,31 @@ begin;
 alter table public.match_predictions
   add column if not exists advance_team_id uuid references public.teams(id) on delete set null;
 
+create or replace function public.derive_match_pred_advancer()
+returns trigger
+language plpgsql
+as $$
+declare
+  v_t1 uuid;
+  v_t2 uuid;
+begin
+  if new.team1_score is not null and new.team2_score is not null
+     and new.team1_score <> new.team2_score then
+    select team1_id, team2_id into v_t1, v_t2 from public.matches where id = new.match_id;
+    if new.team1_score > new.team2_score then
+      new.advance_team_id := v_t1;
+    else
+      new.advance_team_id := v_t2;
+    end if;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists trg_derive_match_pred_advancer on public.match_predictions;
+create trigger trg_derive_match_pred_advancer
+  before insert or update on public.match_predictions
+  for each row execute function public.derive_match_pred_advancer();
+
 -- ----------------------------------------------------------------------------
 -- 2) Knockout matches score double the group base
 -- ----------------------------------------------------------------------------
@@ -502,9 +527,7 @@ begin
         v_match_pts := public.score_match(v_pred.pt1, v_pred.pt2, v_pred.at1, v_pred.at2);
         v_match_pts := round(v_match_pts * public.round_multiplier(v_pred.mround))::integer;
 
-        if v_pred.mstage = 'knockout'
-           and v_pred.mround not in ('Final', 'Match for third place')
-           and v_pred.adv_pred is not null then
+        if v_pred.mstage = 'knockout' and v_pred.adv_pred is not null then
           v_advancer := public.knockout_advancer(
             v_pred.m_t1, v_pred.m_t2,
             v_pred.at1, v_pred.at2,

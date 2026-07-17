@@ -176,6 +176,8 @@ export const t = {
     boostPool: 'Knockout-boosts',
     score90: '90-minutenstand',
     advance: 'Wie gaat door?',
+    advanceDraw: 'Bij gelijkspel, wie wint?',
+    advanceAuto: 'Winnaar',
     advanceHint: 'Bij gelijkspel beslist verlenging/penalty\u2019s. Goed = +2 punten.',
     advanceShort: 'door',
     teamsUnknown: 'Teams nog niet bekend',
